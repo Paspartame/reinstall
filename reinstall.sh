@@ -109,6 +109,7 @@ Usage: $reinstall_____ anolis      7|8|23
                        [--password    PASSWORD]
                        [--ssh-key     KEY]
                        [--ssh-port    PORT]
+                       [--encrypt] [--unlock-port PORT]
                        [--web-port    PORT]
                        [--frpc-config PATH]
 
@@ -4959,6 +4960,7 @@ for o in ci installer debug minimal no-cloud-kernel no-auto-drivers allow-ping f
     user: username: \
     passwd: password: \
     ssh-port: \
+    unlock-port: \
     ssh-key: public-key: \
     rdp-port: \
     web-port: http-port: \
@@ -5183,6 +5185,15 @@ EOF
 
         shift 2
         ;;
+    --encrypt)
+        encrypt=1
+        shift
+        ;;
+    --unlock-port)
+        is_port_valid "$2" || error_and_exit "Invalid $1 value: $2"
+        unlock_port=$2
+        shift 2
+        ;;
     --ssh-port)
         is_port_valid $2 || error_and_exit "Invalid $1 value: $2"
         ssh_port=$2
@@ -5301,6 +5312,14 @@ if ! is_netboot_xyz && [ -z "$username" ]; then
 fi
 
 # 密码
+if [ -n "$encrypt" ]; then
+    # Fail closed: partman-crypto 134 copies its debconf secret into a caller-
+    # selected keyfile under partman device state; this project has no verified
+    # post-crypto cleanup hook or proven RAM-only backing for that location.
+    # Never allow the flag to proceed as an ordinary, unencrypted install.
+    error_and_exit "--encrypt is temporarily disabled: installer passphrase handling is not yet proven RAM-only and safely cleaned up. No reboot or installation was started."
+fi
+
 if ! is_netboot_xyz && [ -z "$ssh_keys" ] && [ -z "$password" ]; then
     if is_use_dd; then
         show_dd_password_tips
