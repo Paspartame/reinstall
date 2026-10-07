@@ -300,6 +300,11 @@ flush_ipv6_config() {
     sed -i "/:/d" /etc/resolv.conf
 }
 
+# Internal initramfs consumer reuses MAC lookup and static-route helpers only.
+if [ "${REINSTALL_NETWORK_LIBRARY_ONLY:-0}" = 1 ]; then
+    return 0
+fi
+
 for i in $(seq 20); do
     if ethx=$(get_ethx); then
         break
