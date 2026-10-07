@@ -1,0 +1,183 @@
+#!/bin/sh
+# Standalone installer component; not connected to the installation entry point.
+# Installer injection must supply stat/base64/mkfifo (stock d-i busybox omits them).
+# Success gate: both SETs, published OK, helper acknowledgement AND both processes
+# exiting zero. A caller must never proceed to formatting on absent OK/nonzero.
+# cdebconf passwords.dat and its rotated backup must remain RAM-backed; clear
+# through the frontend after consumption. Do not copy these databases to target.
+set +x
+set -eu
+# Inherited exported names must not turn later shell-local secrets into env vars.
+unset first second secret encoded escaped canonical RET old
+LC_ALL=C
+export LC_ALL
+ROOT=/run
+DIR=$ROOT/reinstall-luks
+OWNER=0
+MODE=${0##*/}
+fail() { printf '%s\n' "$1" >&2; exit 1; }
+[ "$#" -eq 0 ] || fail 'Arguments are not accepted.'
+[ "$(id -u)" = "$OWNER" ] || fail 'Installer root is required.'
+[ -z "${DEBCONF_DEBUG-}${DEBCONF_DEBUGFILE-}" ] || fail 'Debconf debugging must be disabled.'
+# Verify the containing filesystem, not a nonexistent child mount point.
+[ "$(stat -f -c %T "$ROOT")" = tmpfs ] || fail 'The IPC directory must be RAM-backed.'
+[ ! -L "$ROOT" ] || fail 'Unsafe RAM directory.'
+awk 'NR > 1 && NF { bad=1 } END { exit bad }' /proc/swaps || fail 'Active swap is not allowed.'
+umask 077
+valid() {
+    [ -n "$1" ] || return 1
+    # Unicode White_Space plus the ASCII whitespace recognized by cdebconf.
+    case "$1" in [[:space:]]*|*[[:space:]]) return 1;; esac
+    for ws in '' ' ' ' ' ' ' ' ' ' ' ' ' ' ' ' ' ' ' ' ' ' ' ' ' ' ' ' ' ' ' ' ' ' ' '　'; do
+        case "$1" in "$ws"*|*"$ws") return 1;; esac
+    done
+    return 0
+}
+secure_dir() {
+    [ -d "$DIR" ] && [ ! -L "$DIR" ] &&
+    [ "$(stat -c %u "$DIR")" = "$OWNER" ] &&
+    [ "$(stat -c %a "$DIR")" = 700 ]
+}
+alive() {
+    [ -f "$DIR/pid" ] || return 1
+    IFS= read -r pid < "$DIR/pid" || return 1
+    case "$pid" in ''|*[!0-9]*) return 1;; esac
+    kill -0 "$pid" 2>/dev/null
+}
+clear_db() {
+    ( db_set partman-crypto/passphrase '' ) >/dev/null 2>&1 || :
+    ( db_set partman-crypto/passphrase-again '' ) >/dev/null 2>&1 || :
+}
+if [ "$MODE" = reinstall-luks-receiver ]; then
+    case "$(stat -f -c %T /var/lib/cdebconf)" in
+        tmpfs|ramfs) ;;
+        *) fail 'Installer debconf database must be RAM-backed.';;
+    esac
+    # Establish the installer frontend before creating process-owned IPC state.
+    # confmodule otherwise re-execs us after claiming the directory.
+    if [ -z "${DEBIAN_HAS_FRONTEND-}" ]; then
+        exec /usr/lib/cdebconf/debconf -- "$0"
+    fi
+    # A dead receiver's directory is safe to remove only after ownership checks.
+    if [ -e "$DIR" ]; then
+        secure_dir || fail 'Unsafe existing IPC directory.'
+        alive && fail 'A receiver is already running.'
+        rm -rf -- "$DIR"
+    fi
+    mkdir -m 700 "$DIR" || fail 'Cannot claim IPC directory.'
+    printf '%s\n' "$$" > "$DIR/pid"
+    initialized=0
+    committed=0
+    cleanup() {
+        rc=$?
+        trap - EXIT HUP INT TERM
+        set +e
+        trap '' PIPE
+        [ "$initialized" = 0 ] || [ "$committed" = 1 ] || clear_db
+        unset secret encoded escaped RET
+        rm -rf -- "$DIR"
+        exit "$rc"
+    }
+    trap cleanup EXIT
+    trap 'exit 1' HUP INT TERM
+    mkfifo -m 600 "$DIR/passphrase.fifo"
+    # FD 3 belongs to confmodule. Keep IPC on FD 7.
+    exec 7<>"$DIR/passphrase.fifo"
+    . /usr/share/debconf/confmodule
+    initialized=1
+    db_capb escape
+    clear_db
+    : > "$DIR/ready"
+    IFS= read -r encoded <&7 || exit 1
+    # A sentinel preserves trailing newlines so validation cannot silently trim.
+    secret=$(printf '%s' "$encoded" | base64 -d 2>/dev/null && printf '.') || exit 1
+    secret=${secret%.}
+    # Detect invalid encodings and NULs that a shell variable cannot represent.
+    canonical=$(printf '%s' "$secret" | base64 | tr -d '\n')
+    if [ "$canonical" != "$encoded" ] || ! valid "$secret"; then
+        result='ERROR:Invalid passphrase payload.'
+    else
+        # cdebconf CAPB escape: only backslash/newline need wire escaping.
+        escaped=$(printf '%s\n' "$secret" | sed 's/\\/\\\\/g' | sed ':a;N;$!ba;s/\n/\\n/g')
+        result='ERROR:Debconf update failed.'
+        if db_set partman-crypto/passphrase "$escaped" &&
+           db_set partman-crypto/passphrase-again "$escaped"; then
+            result=OK
+        else
+            clear_db
+        fi
+    fi
+    unset secret encoded escaped canonical RET
+    printf '%s\n' "$result" > "$DIR/status.new"
+    mv "$DIR/status.new" "$DIR/status"
+    # Status is retained until the helper acknowledges it; no readiness sleeps.
+    n=0
+    while [ ! -f "$DIR/ack" ]; do
+        n=$((n + 1)); [ "$n" -lt 300 ] || exit 1
+        sleep 1
+    done
+    [ "$result" = OK ] || exit 1
+    committed=1
+    exit 0
+fi
+[ "$MODE" = reinstall-luks-passphrase ] || fail 'Unknown component name.'
+secure_dir || fail 'Receiver has not started.'
+alive || fail 'Receiver is not running.'
+[ -f "$DIR/ready" ] || fail 'Receiver is not ready.'
+[ -p "$DIR/passphrase.fifo" ] && [ ! -L "$DIR/passphrase.fifo" ] || fail 'Invalid or missing FIFO.'
+# One helper owns this interaction; no second writer can interleave payloads.
+mkdir "$DIR/client" 2>/dev/null || fail 'Another helper is active.'
+old=
+helper_cleanup() {
+    rc=$?
+    trap - EXIT HUP INT TERM
+    [ -z "$old" ] || stty "$old" </dev/tty 2>/dev/null || :
+    unset first second encoded
+    rmdir "$DIR/client" 2>/dev/null || :
+    if [ "$rc" != 0 ] && alive; then
+        kill -TERM "$pid" 2>/dev/null || :
+        n=0
+        while [ -d "$DIR" ] && alive; do
+            n=$((n + 1)); [ "$n" -lt 100 ] || break
+            sleep 1
+        done
+    fi
+    exit "$rc"
+}
+trap helper_cleanup EXIT
+trap 'exit 1' HUP INT TERM
+old=$(stty -g </dev/tty) || fail 'A controlling terminal is required.'
+stty -echo </dev/tty
+printf 'Enter LUKS passphrase: ' >/dev/tty
+IFS= read -r first </dev/tty || fail 'Cannot read passphrase.'
+printf '\nConfirm LUKS passphrase: ' >/dev/tty
+IFS= read -r second </dev/tty || fail 'Cannot read confirmation.'
+printf '\n' >/dev/tty
+stty "$old" </dev/tty
+old=
+[ -n "$first" ] || fail 'Empty passphrase is not allowed.'
+[ "$first" = "$second" ] || fail 'Passphrases do not match.'
+valid "$first" || fail 'LUKS passphrase must not begin or end with whitespace.'
+encoded=$(printf '%s' "$first" | base64 | tr -d '\n')
+unset first second
+# Read/write open cannot hang when the peer has exited between checks.
+exec 7<>"$DIR/passphrase.fifo"
+alive && [ -f "$DIR/ready" ] || fail 'Receiver exited.'
+printf '%s\n' "$encoded" >&7
+unset encoded
+n=0
+while [ ! -f "$DIR/status" ]; do
+    alive || fail 'Receiver exited before confirmation.'
+    n=$((n + 1)); [ "$n" -lt 300 ] || fail 'Receiver confirmation timed out.'
+    sleep 1
+done
+IFS= read -r result < "$DIR/status"
+: > "$DIR/ack"
+[ "$result" = OK ] || fail "$result"
+# Wait for receiver cleanup, not merely successful FIFO transmission.
+n=0
+while [ -d "$DIR" ]; do
+    n=$((n + 1)); [ "$n" -lt 300 ] || fail 'Receiver cleanup timed out.'
+    sleep 1
+done
+exit 0
