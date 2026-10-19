@@ -5379,7 +5379,7 @@ if [ -n "${encrypt-}" ]; then
     crypto_static_busybox=$(python3 "$confhome_local/debian-crypto-runtime.py") || error_and_exit "Install trusted busybox-static and python3 before --encrypt."
     # Keep the encryption branch fail-closed until fork-generated guest validation.
     error_and_exit "--encrypt NOT_YET_USABLE: fork-generated installer SSH/PTY and encrypted boot validation have not passed. No installation was started."
-    [ "$distro" = debian ] && [ "$releasever" = 13 ] && [ "$nextos_distro" = debian ] && [ "$nextos_releasever" = 13 ] || error_and_exit "--encrypt supports Debian 13 only."
+    [ "$distro" = debian ] && [ "$releasever" = 13 ] || error_and_exit "--encrypt supports Debian 13 only."
     [ -n "$ssh_keys" ] || error_and_exit "--encrypt requires --ssh-key with a usable public key."
     [ -n "$installer" ] && [ -z "${cloud_image-}" ] || error_and_exit "--encrypt requires the Debian installer path."
     [ -z "${cloud_data-}${img-}${iso-}${boot_wim-}" ] || error_and_exit "--encrypt does not support cloud-data or alternate image sources."
