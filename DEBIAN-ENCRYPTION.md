@@ -1,5 +1,37 @@
 # Experimental Debian 13 encrypted reinstall
 
+## Current real-VPS validation (S86)
+
+A fresh native CLI reinstall on the authorized BIOS amd64 Debian 13 IPv4 VPS
+passed encrypted installation and two pinned SSH/PTY remote unlocks on the same
+disk. This is limited experimental evidence, not arbitrary-provider certification.
+The previous S81/S83 readiness limitations below are historical; S86 replaces
+only the fresh-install and identity-handoff gaps explicitly described here.
+
+Use the complete immutable source tarball, never reinstall.sh alone. Required
+signed distro packages: python3 busybox-static openssh-client curl cpio gzip
+xz-utils. Keep the private client key and LUKS secret on an independent machine.
+CLI: `bash reinstall.sh debian 13 --installer --encrypt --ssh-key /root/test.pub --unlock-port 2222 --username root`.
+This destroys the target disk. BIOS/amd64/Debian13 IPv4 only; UEFI/IPv6-only are
+unsupported. Have provider VNC/rescue. Unlock is manual at every reboot.
+
+Before reboot record the CLI-printed Installer PUBLIC host key over authenticated
+old-OS SSH. Pin it separately. Use authenticated Installer SSH PTY to run
+`/usr/local/sbin/reinstall-luks-passphrase`, entering and confirming the secret.
+Poll `/run/reinstall-identity-ready`; encrypted installation now waits at the end
+of late_command. Through this trusted Installer session collect normalOS
+`/target/etc/ssh/ssh_host_ed25519_key.pub` and public output of
+`chroot /target dropbearkey -y -f /etc/dropbear/initramfs/dropbear_ed25519_host_key`.
+Compare that identity to the FINAL target initrd, then separately pin normal22
+and Dropbear2222. Never transfer private host keys or trust ssh-keyscan alone.
+Only after layout/initrd checks and public-key collection run
+`touch /run/reinstall-identity-continue`. This pause/release passed real S86.
+At port2222 use strict known_hosts and `ssh -tt`, then independently authenticate
+normalSSH, audit root/boot/no-swap and different boot IDs on repeatedboots.
+Early DHCP remains preferred with MAC-bound saved IPv4/gateway fallback. Two real
+boots passed; which branch supplied early networking was not logged.
+
+
 ## Immutable full-checkout distribution
 
 Never download reinstall.sh alone for encrypted mode. Before any later owner-authorized publication, choose a reviewed immutable commit from this feature branch, publish that exact commit to the configured Fork `https://github.com/Paspartame/reinstall.git`, then use:

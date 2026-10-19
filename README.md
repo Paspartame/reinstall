@@ -2,6 +2,11 @@
 
 # reinstall
 
+Experimental Debian 13 BIOS/amd64 encrypted reinstall and remote unlock: see
+[DEBIAN-ENCRYPTION.md](DEBIAN-ENCRYPTION.md). Requires a complete immutable checkout;
+manual unlock each reboot. Not a general production/UEFI guarantee.
+
+
 [![Codacy](https://img.shields.io/codacy/grade/dc679a17751448628fe6d8ac35e26eed?logo=Codacy&label=Codacy&style=flat-square)](https://app.codacy.com/gh/bin456789/reinstall/dashboard)
 [![CodeFactor](https://img.shields.io/codefactor/grade/github/bin456789/reinstall?logo=CodeFactor&logoColor=white&label=CodeFactor&style=flat-square)](https://www.codefactor.io/repository/github/bin456789/reinstall)
 [![Lines of Code](https://aschey.tech/tokei/github/bin456789/reinstall?category=code&label=Lines%20of%20Code&style=flat-square)](https://github.com/aschey/vercel-tokei)
