@@ -4575,10 +4575,6 @@ This script is outdated, please download reinstall.sh again.
         mod_initrd_$nextos_distro
     fi
 
-    if [ "${encrypt:-0}" != 1 ] && [ "$nextos_distro" = debian ] && [ "$releasever" = 13 ]; then
-        cp "$confhome_local/debian.cfg" "$initrd_dir/actualdebian.cfg" || error_and_exit "Preseed copy failed."
-        chmod 0644 "$initrd_dir/actualdebian.cfg"
-    fi
 
     # 添加自定义 windows 驱动
     if [ "$distro" = windows ] && [ -n "$custom_infs" ]; then
