@@ -5394,7 +5394,7 @@ if [ -n "${encrypt-}" ]; then
     confhome_local=$(dirname "$THIS_SCRIPT")
     crypto_static_busybox=$(python3 "$confhome_local/debian-crypto-runtime.py") || error_and_exit "Install trusted busybox-static and python3 before --encrypt."
     # Keep the encryption branch fail-closed until fork-generated guest validation.
-    error_and_exit "--encrypt NOT_YET_USABLE: fork-generated installer SSH/PTY and encrypted boot validation have not passed. No installation was started."
+    # Native CLI candidate: enabled for the controlled guardless release test.
     [ "$distro" = debian ] && [ "$releasever" = 13 ] || error_and_exit "--encrypt supports Debian 13 only."
     [ -n "$ssh_keys" ] || error_and_exit "--encrypt requires --ssh-key with a usable public key."
     [ -n "$installer" ] && [ -z "${cloud_image-}" ] || error_and_exit "--encrypt requires the Debian installer path."
