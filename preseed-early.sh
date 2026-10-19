@@ -71,7 +71,7 @@ touch /tmp/S70_PRESEED_EARLY_COMMAND; echo S70_PRESEED_EARLY_COMMAND >/dev/conso
         echo S73_MOTD_DONE >/dev/console; \
         mem=$(grep ^MemTotal: /proc/meminfo | { read -r _ y _; echo "$((y / 1024))"; }); \
         echo S73_MEMORY_DONE >/dev/console; \
-        if command -v websocketd && [ "$mem" -ge 400 ] && { [ ! -f /reinstall-crypto-enabled ] || [ -n "${web_path:-}" ]; }; then \
+        if [ ! -f /reinstall-crypto-enabled ] && command -v websocketd && [ "$mem" -ge 400 ]; then \
             mkdir -p /tmp/web; \
             echo 'Wrong Path' >/tmp/web/index.html; \
             for _ in {1..10}; do \

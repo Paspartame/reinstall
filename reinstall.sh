@@ -209,7 +209,9 @@ curl() {
     # 因此手动 retry
     for i in $(seq 5); do
         if [ "${encrypt:-0}" = 1 ]; then
-            command curl --connect-timeout 10 -f "$@" && return 0
+            if command curl --connect-timeout 10 -f "$@"; then return 0; else ret=$?; fi
+            if [ "$ret" -eq 22 ] || [ "$i" -eq 5 ]; then return "$ret"; fi
+            sleep 1
         elif command curl --insecure --connect-timeout 10 -f "$@"; then
             return
         else
@@ -5395,6 +5397,7 @@ if [ -n "${encrypt-}" ]; then
     crypto_static_busybox=$(python3 "$confhome_local/debian-crypto-runtime.py") || error_and_exit "Install trusted busybox-static and python3 before --encrypt."
     # Keep the encryption branch fail-closed until fork-generated guest validation.
     if is_efi; then error_and_exit "--encrypt currently supports tested BIOS amd64 only; EFI is not validated."; fi
+    [ -z "${frpc_config-}" ] || error_and_exit "--encrypt does not support optional FRPC; use console/SSH directly."
     # Full immutable checkout is required; crypto composition sources adjacent files.
     for required in trans.sh initrd-network.sh get-xda.sh ttys.sh fix-eth-name.sh fix-eth-name.service debian.cfg preseed-early.sh preseed-late.sh partman-early.sh; do
         [ -f "$confhome_local/$required" ] || error_and_exit "Incomplete encrypted checkout: $required"
