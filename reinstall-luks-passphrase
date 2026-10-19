@@ -6,6 +6,8 @@
 # cdebconf passwords.dat and its rotated backup must remain RAM-backed; clear
 # through the frontend after consumption. Do not copy these databases to target.
 set +x
+PATH=/usr/local/lib/reinstall/applets:$PATH
+export PATH
 set -eu
 # Inherited exported names must not turn later shell-local secrets into env vars.
 unset first second secret encoded escaped canonical RET old
