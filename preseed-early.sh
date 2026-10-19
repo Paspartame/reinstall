@@ -6,6 +6,7 @@ touch /tmp/S70_PRESEED_EARLY_COMMAND; echo S70_PRESEED_EARLY_COMMAND >/dev/conso
     username=${username:-root}; \
     ssh_port=${ssh_port:-22}; \
     web_port=${web_port:-80}; \
+    hold=${hold:-0}; \
 
     di(){ \
         echo "d-i $*" >/tmp/selections.cfg; \
