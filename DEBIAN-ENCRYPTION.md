@@ -1,65 +1,152 @@
 # Experimental Debian 13 encrypted reinstall
 
-## Current real-VPS validation (S86)
+## Scope and verified results
 
-A fresh native CLI reinstall on the authorized BIOS amd64 Debian 13 IPv4 VPS
-passed encrypted installation and two pinned SSH/PTY remote unlocks on the same
-disk. This is limited experimental evidence, not arbitrary-provider certification.
-The previous S81/S83 readiness limitations below are historical; S86 replaces
-only the fresh-install and identity-handoff gaps explicitly described here.
+BIOS, amd64, Debian 13 installer, reachable IPv4 only. S86 completed a fresh
+real-VPS public CLI encrypted installation and two pinned remote SSH/PTY unlocks
+on the same disk, with independent normal-OS audits and different boot IDs.
+Synthetic disposable credentials were used. Root is LUKS2 → LVM → ext4, with
+independent ext4 `/boot` and no swap. Early DHCP versus the MAC-bound stored static
+fallback was not independently identified on the successful boots.
 
-Use the complete immutable source tarball, never reinstall.sh alone. Required
-signed distro packages: python3 busybox-static openssh-client curl cpio gzip
-xz-utils. Keep the private client key and LUKS secret on an independent machine.
-CLI: `bash reinstall.sh debian 13 --installer --encrypt --ssh-key /root/test.pub --unlock-port 2222 --username root`.
-This destroys the target disk. BIOS/amd64/Debian13 IPv4 only; UEFI/IPv6-only are
-unsupported. Have provider VNC/rescue. Unlock is manual at every reboot.
+UEFI, IPv6-only and arbitrary providers are unsupported/unproven. Provider cold
+power cycle and a complete ordinary unencrypted installation were NOT tested.
+This is Experimental, not production certification or a one-click installer.
+Each encrypted reboot requires manual unlock. Maintain backups and provider
+VNC/rescue. Loss of the LUKS secret means loss of encrypted data.
 
-Before reboot record the CLI-printed Installer PUBLIC host key over authenticated
-old-OS SSH. Pin it separately. Use authenticated Installer SSH PTY to run
-`/usr/local/sbin/reinstall-luks-passphrase`, entering and confirming the secret.
-Poll `/run/reinstall-identity-ready`; encrypted installation now waits at the end
-of late_command. Through this trusted Installer session collect normalOS
-`/target/etc/ssh/ssh_host_ed25519_key.pub` and public output of
-`chroot /target dropbearkey -y -f /etc/dropbear/initramfs/dropbear_ed25519_host_key`.
-Compare that identity to the FINAL target initrd, then separately pin normal22
-and Dropbear2222. Never transfer private host keys or trust ssh-keyscan alone.
-Only after layout/initrd checks and public-key collection run
-`touch /run/reinstall-identity-continue`. This pause/release passed real S86.
-At port2222 use strict known_hosts and `ssh -tt`, then independently authenticate
-normalSSH, audit root/boot/no-swap and different boot IDs on repeatedboots.
-Early DHCP remains preferred with MAC-bound saved IPv4/gateway fallback. Two real
-boots passed; which branch supplied early networking was not logged.
+## Obtain the whole immutable source
 
+Publication has not been authorized. The supplied full candidate tarball works
+without GitHub: verify its accompanying SHA-256 file, unpack it and enter its
+source directory. Do not download `reinstall.sh` alone.
 
-## Immutable full-checkout distribution
-
-Never download reinstall.sh alone for encrypted mode. Before any later owner-authorized publication, choose a reviewed immutable commit from this feature branch, publish that exact commit to the configured Fork `https://github.com/Paspartame/reinstall.git`, then use:
+**Post-publication template only:** after the owner publishes a reviewed commit,
+set `REV` to the exact full SHA in that release's source manifest, then run:
 
 ```sh
 git clone https://github.com/Paspartame/reinstall.git
 cd reinstall
-git checkout --detach <REVIEWED_PUBLISHED_COMMIT>
-# Install only on the intended disposable test machine, not the development host:
-apt-get update && apt-get install -y python3 busybox-static openssh-client curl cpio gzip
+git checkout --detach "$REV"
+test "$(git rev-parse HEAD)" = "$REV"
 ```
 
-Publication has NOT happened in S81. The commit placeholder must be replaced with the actual published hash, never main/latest. Adjacent executable/network/preseed helpers come from the checkout. Legacy optional logviewer/frpc resources still reference upstream main; immutable source routing for those paths remains a release limitation. Do not claim a closed release bundle yet.
+No working commit URL or published asset is asserted here. Compare the manifest
+and candidate archive checksum delivered with the reviewed version.
 
-**IRREVERSIBLE DISK ERASURE:** the subsequent reinstall command destroys the selected machine's partitions. Verified backups, provider rescue console and separately pinned SSH host identities are required. Open the normal SSH and initramfs unlock ports in provider firewall/security groups. Every encrypted reboot requires manual remote unlock before normal SSH is available.
+## Prepare on the intended disposable target
 
-S81 explicitly rejects encrypted EFI; supported local evidence is BIOS amd64 DHCP only. Static IPv4/gateways are configuration-derived but not provider-tested, IPv6-only is rejected, cloud firewalls/custom routing/provider rescue behavior are not certified. Do not use this on a normal production VPS based solely on QEMU results.
-
-**Local native CLI E2E validated in S80; not VPS-certified.** Fresh guardless root CLI self-reinstall and both same-disk unlock boots passed in disposable BIOS QEMU. No production deployment approved.
+These package commands assume Debian with signed APT repositories:
 
 ```sh
-bash reinstall.sh debian 13 --installer --encrypt --ssh-key /path/to/test.pub --unlock-port 2222 --username root
+apt-get update
+apt-get install -y python3 busybox-static openssh-client curl cpio gzip xz-utils
+uname -m
+test ! -d /sys/firmware/efi
+findmnt /boot
+ip -4 route
 ```
 
-Root must be inside the intended installed system; keep verified backups and an independent rescue console. BusyBox must be administrator-installed at /usr/bin/busybox. Pin Installer public identity from trusted console/ttyS0; obtain target Dropbear and normal OS public identities through authenticated Installer before reboot. Do not disable strict checking. Use `TERM=screen sh /installer-screen.sh` for exact installer window1 discovery; ambiguity is refused. Provider rescue/console access is required for failure recovery; a lost LUKS passphrase cannot be recovered.
+Use a new public SSH key at `/root/reinstall-unlock.pub`. Keep its private key on
+an independent controller, and choose a new user-held LUKS secret. Never reuse
+the development test secret. Open TCP 22 (Installer and normal OS, distinct
+identities) and TCP 2222 (initramfs unlock) in actual provider/host firewalls.
+Confirm rescue availability before erasing the target.
 
-Supported design target: Debian 13 amd64, explicit `--installer`, a plain supported SSH public key (`--ssh-key` literal or file; mature URL/username resolver retained), and `--unlock-port` (default 2222). Requires a complete adjacent source checkout, Python 3, OpenSSH key tools and trusted distribution `busybox-static`.
+**The following erases the target disk and partitions:**
 
-Installer SSH uses the configured normal SSH port. Run `/usr/local/sbin/reinstall-luks-passphrase` in an authenticated PTY to submit and confirm the synthetic/test LUKS passphrase. After reboot, initramfs Dropbear uses the unlock port and a distinct host identity; use a pinned key and `ssh -tt` for interactive `cryptroot-unlock`. Normal OS SSH has its own pinned identity. Do not append newline in raw non-TTY mode: the Debian script copies it as a password byte. Never disable SSH host verification.
+```sh
+bash reinstall.sh debian 13 --installer --encrypt --ssh-key /root/reinstall-unlock.pub --unlock-port 2222 --username root
+```
 
-No production VPS safety claim or deployment approval. Local BIOS native CLI validation does not cover UEFI, other hardware or networks; further deployment review remains necessary. Changes were integrated with Hermes Agent assistance; Git identity is the repository's existing configured identity.
+Before reboot, record the CLI-printed Installer public host key over the trusted
+old-OS SSH session. Store `TARGET ssh-ed25519 ...` in a dedicated
+`installer-known-hosts` file on the controller. Reboot the target when ready.
+All controller commands below use your actual hostname in place of `TARGET` and
+`./unlock-client-key` for the private client identity retained outside the target.
+
+## Installer password and required public-key handoff
+
+```sh
+ssh -tt -i ./unlock-client-key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=./installer-known-hosts root@TARGET /usr/local/sbin/reinstall-luks-passphrase
+```
+
+Enter and confirm the LUKS secret interactively. Installation continues, then
+intentionally waits at the end of late_command. This is a required human step,
+not a hang. Through the same pinned Installer SSH, poll for
+`/run/reinstall-identity-ready` with bounded checks (for example every 10 seconds
+for up to 30 minutes); if absent, inspect installer progress rather than reboot.
+At readiness, collect **only public output**:
+
+```sh
+cat /target/etc/ssh/ssh_host_ed25519_key.pub
+chroot /target dropbearkey -y -f /etc/dropbear/initramfs/dropbear_ed25519_host_key
+```
+
+Store normal OS public key as `TARGET ssh-ed25519 ...` in `os-known-hosts`, and
+Dropbear public key as `[TARGET]:2222 ssh-ed25519 ...` in `dropbear-known-hosts`.
+Keep all three identities separate. Do not export private host keys or use
+ssh-keyscan alone as trust. Fingerprint public files with `ssh-keygen -lf`.
+
+Verify the final installed initrd includes the expected identity and network
+script **on the target**, without exporting the private key:
+
+```sh
+k=$(ls /target/lib/modules | head -n 1)
+chroot /target unmkinitramfs /boot/initrd.img-$k /run/identity-check
+# unmkinitramfs may extract directly or under main/; inspect its directory layout.
+find /target/run/identity-check -name dropbear_ed25519_host_key -o -name reinstall-unlock-network
+```
+
+Use `cmp` on-target against `/target/etc/dropbear/initramfs/dropbear_ed25519_host_key`
+and `/target/usr/local/lib/reinstall/debian-unlock-network.sh` respectively.
+Check target layout, `/target/boot/grub/grub.cfg` and no swap. Remove only the
+owned `/target/run/identity-check` extraction. Once keys are pinned and checks
+pass, release the pause through authenticated Installer SSH:
+
+```sh
+touch /run/reinstall-identity-continue
+```
+
+## Unlock and independently verify normal OS
+
+```sh
+ssh -tt -i ./unlock-client-key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=./dropbear-known-hosts -p 2222 root@TARGET
+ssh -i ./unlock-client-key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=./os-known-hosts root@TARGET
+```
+
+Enter the secret at the verified Dropbear prompt. Do not use a raw non-TTY stream
+with a trailing newline: that newline can become a password byte. A disconnect
+or sender exit 0 is not boot success. Wait for independently authenticated normal
+SSH, then inspect:
+
+```sh
+cat /etc/debian_version
+findmnt /
+findmnt /boot
+lsblk -f
+cat /proc/swaps
+test ! -e /swapfile
+ip -4 route
+pgrep dropbear
+cat /proc/sys/kernel/random/boot_id
+```
+
+Expect encrypted LVM/ext4 root, ext4 boot, no swap and no initramfs Dropbear.
+Reboot the same disk, repeat unlock/audit and compare boot IDs.
+
+## Recovery and limitations
+
+- Stuck at identity pause: gather/verify keys before touching the continue file.
+- Unreachable unlock SSH: inspect VNC NIC/DHCP/route and provider TCP2222 rules;
+  local VNC unlock can restore normal OS for diagnosis. Never bypass SSH trust.
+- GRUB cannot find installer: boot the original Debian entry and recover; inspect
+  independent `/boot` staging, not repeated blind reinstalls. Encrypted-mode CLI
+  now stages installer artifacts on separate unencrypted `/boot` when present.
+- Rescue/new identity: authenticate its public fingerprint via provider console
+  before accessing the disk; do not silently replace known_hosts.
+
+Encrypted helpers/preseed come from the adjacent checkout. Optional remote
+logviewer is disabled and FRPC refused in encrypted mode; legacy ordinary-mode
+behavior is not rewritten. No general provider/network certification is implied.
+Development was assisted by Hermes Agent; repository Git identity is unchanged.
