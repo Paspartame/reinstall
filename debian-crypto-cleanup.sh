@@ -1,5 +1,7 @@
 #!/bin/sh
 # Run after partman/base installation, before installer logs reach the target.
+PATH=/usr/local/lib/reinstall/applets:$PATH
+export PATH
 set +x
 set -eu
 [ -f /reinstall-crypto-enabled ] || exit 0

@@ -1587,7 +1587,12 @@ Continue?
             set_osvar udeb_mirror "$udeb_mirror"
             set_osvar vmlinuz "https://$initrd_mirror/$initrd_dir/linux"
             set_osvar initrd "https://$initrd_mirror/$initrd_dir/initrd.gz"
-            set_osvar ks "$confhome/debian.cfg"
+            if [ "${encrypt:-0}" = 1 ]; then
+                # Encrypted mode uses only root-level /preseed.cfg to avoid duplicate execution.
+                set_osvar ks ""
+            else
+                set_osvar ks "$confhome/debian.cfg"
+            fi
             set_osvar firmware "$cdimage_mirror/unofficial/non-free/firmware/$codename/current/firmware.cpio.gz"
             set_osvar codename "$codename"
         fi
@@ -1620,7 +1625,12 @@ Continue?
 
             set_osvar vmlinuz "$mirror/linux"
             set_osvar initrd "$mirror/initrd.gz"
-            set_osvar ks "$confhome/debian.cfg"
+            if [ "${encrypt:-0}" = 1 ]; then
+                # Debian 13 encrypted path relies on root-level /preseed.cfg only.
+                set_osvar ks ""
+            else
+                set_osvar ks "$confhome/debian.cfg"
+            fi
             set_osvar deb_mirror "$hostname/kali"
             set_osvar udeb_mirror "$hostname/kali"
             set_osvar codename "$codename"
@@ -3620,7 +3630,7 @@ build_extra_cmdline() {
     # https://salsa.debian.org/installer-team/rootskel/-/blob/master/src/lib/debian-installer-startup.d/S02module-params?ref_type=heads
     for key in confhome hold force_boot_mode force_cn force_old_windows_setup cloud_image no_cloud_kernel no_auto_drivers main_disk \
         elts deb_mirror \
-        username ssh_port rdp_port web_port web_path allow_ping; do
+        username ssh_port rdp_port web_port web_path allow_ping unlock_port; do
         value=${!key}
         if [ -n "$value" ]; then
             is_need_quote "$value" &&
@@ -3672,7 +3682,9 @@ build_nextos_cmdline() {
         # 如果要设置位数: video=800x600-16
         nextos_cmdline="lowmem/low=1 auto=true priority=critical"
         # nextos_cmdline+=" vga=788 video=800x600"
-        nextos_cmdline+=" url=$nextos_ks"
+        if [ -n "$nextos_ks" ]; then
+            nextos_cmdline+=" url=$nextos_ks"
+        fi
         nextos_cmdline+=" mirror/http/hostname=${nextos_udeb_mirror%/*}"
         nextos_cmdline+=" mirror/http/directory=/${nextos_udeb_mirror##*/}"
         nextos_cmdline+=" base-installer/kernel/image=$nextos_kernel"
@@ -3791,6 +3803,27 @@ force_serial_if_exists() {
 }
 
 mod_initrd_debian_kali() {
+    if [ "${encrypt:-0}" = 1 ] && [ "$distro" = debian ] && [ "$releasever" = 13 ]; then
+        confhome_local=$(dirname "$THIS_SCRIPT")
+        [ -f "$confhome_local/debian-crypto-build.py" ] || error_and_exit "Encrypted initrd builder missing."
+        [ -f "$confhome_local/debian.cfg" ] || error_and_exit "Canonical encrypted preseed missing."
+        python3 "$confhome_local/debian-crypto-build.py" --repo "$confhome_local" --initrd-root "$initrd_dir" \
+            --ssh-key "$crypto_public_key_file" --port "$unlock_port" --static-busybox "$crypto_static_busybox" || error_and_exit "Encrypted initrd staging failed."
+        cp "$confhome_local/debian-unlock-install.sh" "$initrd_dir/debian-unlock-install.sh"
+        chmod 0755 "$initrd_dir/debian-unlock-install.sh"
+        cp "$confhome_local/debian.cfg" "$initrd_dir/actualdebian.cfg"
+        cp "$confhome_local/debian.cfg" "$initrd_dir/preseed.cfg"
+        chmod 0644 "$initrd_dir/actualdebian.cfg" "$initrd_dir/preseed.cfg"
+        cmp "$confhome_local/debian.cfg" "$initrd_dir/actualdebian.cfg" || error_and_exit "Composed preseed mismatch."
+    fi
+    if [ "$distro" = debian ] && [ "$releasever" = 13 ]; then
+        mkdir -p "$initrd_dir/usr/local/lib/reinstall"
+        for helper in preseed-early.sh preseed-late.sh partman-early.sh preseed-mirror-diagnostic.sh; do
+            [ -f "$confhome_local/$helper" ] || error_and_exit "Preseed helper missing: $helper"
+            cp "$confhome_local/$helper" "$initrd_dir/usr/local/lib/reinstall/$helper"
+            chmod 0755 "$initrd_dir/usr/local/lib/reinstall/$helper"
+        done
+    fi
     # hack 1
     # 允许设置 ipv4 onlink 网关
     sed -Ei 's,&&( onlink=),||\1,' etc/udhcpc/default.script
@@ -3845,8 +3878,13 @@ mod_initrd_debian_kali() {
     }
 
     postinst=var/lib/dpkg/info/netcfg.postinst
-    get_function_content netcfg >$postinst
-    get_ip_conf_cmd | insert_into_file $postinst after ": get_ip_conf_cmd"
+    if [ "${encrypt:-0}" != 1 ]; then
+        get_function_content netcfg >$postinst
+        get_ip_conf_cmd | insert_into_file $postinst after ": get_ip_conf_cmd"
+    else
+        printf '#!/bin/sh\nexec /usr/bin/netcfg\n' >$postinst
+        chmod 0755 "$postinst"
+    fi
     # cat $postinst
 
     # hack 4
@@ -3947,11 +3985,11 @@ EOF
         case "$type" in
         deb)
             local mirror=$nextos_deb_mirror
-            local url=http://$mirror/dists/$nextos_codename/main/binary-$basearch_alt/Packages.gz
+            local url=https://$mirror/dists/$nextos_codename/main/binary-$basearch_alt/Packages.gz
             ;;
         udeb)
             local mirror=$nextos_udeb_mirror
-            local url=http://$mirror/dists/$nextos_codename/main/debian-installer/binary-$basearch_alt/Packages.gz
+            local url=https://$mirror/dists/$nextos_codename/main/debian-installer/binary-$basearch_alt/Packages.gz
             ;;
         esac
 
@@ -4452,7 +4490,7 @@ mod_initrd() {
 
     # 解压
     # 先删除临时文件，避免之前运行中断有残留文件
-    initrd_dir=$tmp/initrd
+    initrd_dir=${REINSTALL_INITRD_WORKDIR:-$tmp/initrd}
     mkdir_clear $initrd_dir
     cd $initrd_dir
 
@@ -4468,7 +4506,7 @@ mod_initrd() {
 
     # shellcheck disable=SC2046
     # nonmatching 是精确匹配路径
-    zcat /reinstall-initrd | cpio -idm \
+    zcat "${REINSTALL_INITRD_SOURCE_PATH:-${REINSTALL_INITRD_PATH:-/reinstall-initrd}}" | cpio -idm -u \
         $(is_in_windows && echo --nonmatching 'dev/console' --nonmatching 'dev/null')
 
     curl -Lo $initrd_dir/trans.sh $confhome/trans.sh
@@ -4485,6 +4523,8 @@ This script is outdated, please download reinstall.sh again.
     mkdir -p $initrd_dir/configs
     if [ -n "$ssh_keys" ]; then
         cat <<<"$ssh_keys" >$initrd_dir/configs/ssh_keys
+    elif [ "${encrypt:-0}" = 1 ]; then
+        cat "$crypto_public_key_file" >$initrd_dir/configs/ssh_keys
     else
         save_password $initrd_dir/configs
     fi
@@ -4515,6 +4555,11 @@ This script is outdated, please download reinstall.sh again.
         mod_initrd_$nextos_distro
     fi
 
+    if [ "${encrypt:-0}" != 1 ] && [ "$nextos_distro" = debian ] && [ "$releasever" = 13 ]; then
+        cp "$confhome_local/debian.cfg" "$initrd_dir/actualdebian.cfg" || error_and_exit "Preseed copy failed."
+        chmod 0644 "$initrd_dir/actualdebian.cfg"
+    fi
+
     # 添加自定义 windows 驱动
     if [ "$distro" = windows ] && [ -n "$custom_infs" ]; then
         # shellcheck disable=SC1090
@@ -4536,13 +4581,17 @@ This script is outdated, please download reinstall.sh again.
         read -r -p 'Press Enter to continue...'
     fi
 
+    if [ -n "${REINSTALL_INITRD_TEST_HOOK:-}" ]; then
+        "$REINSTALL_INITRD_TEST_HOOK" "$PWD"
+    fi
+
     # 重建
     # 注意要用 cpio -H newc 不要用 cpio -c ，不同版本的 -c 作用不一样，很坑
     # -c    Use the old portable (ASCII) archive format
     # -c    Identical to "-H newc", use the new (SVR4)
     #       portable format.If you wish the old portable
     #       (ASCII) archive format, use "-H odc" instead.
-    find . | cpio --quiet -o -H newc -R 0:0 | gzip -1 >/reinstall-initrd
+    find . | cpio --quiet -o -H newc -R 0:0 | gzip -1 >"${REINSTALL_INITRD_PATH:-/reinstall-initrd}"
     cd - >/dev/null
 }
 
@@ -4961,6 +5010,7 @@ for o in ci installer debug minimal no-cloud-kernel no-auto-drivers allow-ping f
     passwd: password: \
     ssh-port: \
     unlock-port: \
+    encrypt \
     ssh-key: public-key: \
     rdp-port: \
     web-port: http-port: \
@@ -5156,7 +5206,6 @@ EOF
             fi
             ;;
         *)
-            # 检测值是否为 ssh key
             if is_valid_ssh_key "$2"; then
                 ssh_key=$2
             else
@@ -5303,6 +5352,15 @@ EOF
     esac
 done
 
+# Normalize encryption options after parsing so --encrypt is order-independent.
+if [ "${encrypt:-0}" = 1 ]; then
+    unlock_port=${unlock_port:-2222}
+    crypto_public_key_file=${crypto_public_key_file:-$tmp/encrypt-authorized-key}
+    if [ -n "$ssh_keys" ] && [ ! -s "$crypto_public_key_file" ]; then
+        printf '%s\n' "$ssh_keys" >"$crypto_public_key_file"
+    fi
+fi
+
 # 检查必须的参数
 verify_os_args
 
@@ -5312,12 +5370,21 @@ if ! is_netboot_xyz && [ -z "$username" ]; then
 fi
 
 # 密码
-if [ -n "$encrypt" ]; then
-    # Fail closed: partman-crypto 134 copies its debconf secret into a caller-
-    # selected keyfile under partman device state; this project has no verified
-    # post-crypto cleanup hook or proven RAM-only backing for that location.
-    # Never allow the flag to proceed as an ordinary, unencrypted install.
-    error_and_exit "--encrypt is temporarily disabled: installer passphrase handling is not yet proven RAM-only and safely cleaned up. No reboot or installation was started."
+if [ -n "${encrypt-}" ]; then
+    [ "$distro" = debian ] && [ "$releasever" = 13 ] && [ "$basearch" = x86_64 ] || error_and_exit "--encrypt supports Debian 13 amd64 only."
+    [ -n "$installer" ] && [ -z "${cloud_image-}${cloud_data-}${img-}${iso-}${boot_wim-}" ] || error_and_exit "--encrypt requires --installer without alternate images."
+    [ -s "$crypto_public_key_file" ] || error_and_exit "--encrypt requires a public --ssh-key."
+    ssh-keygen -l -f "$crypto_public_key_file" >/dev/null 2>&1 || error_and_exit "Invalid encryption SSH public key."
+    confhome_local=$(dirname "$THIS_SCRIPT")
+    crypto_static_busybox=$(python3 "$confhome_local/debian-crypto-runtime.py") || error_and_exit "Install trusted busybox-static and python3 before --encrypt."
+    # Keep the encryption branch fail-closed until fork-generated guest validation.
+    error_and_exit "--encrypt NOT_YET_USABLE: fork-generated installer SSH/PTY and encrypted boot validation have not passed. No installation was started."
+    [ "$distro" = debian ] && [ "$releasever" = 13 ] && [ "$nextos_distro" = debian ] && [ "$nextos_releasever" = 13 ] || error_and_exit "--encrypt supports Debian 13 only."
+    [ -n "$ssh_keys" ] || error_and_exit "--encrypt requires --ssh-key with a usable public key."
+    [ -n "$installer" ] && [ -z "${cloud_image-}" ] || error_and_exit "--encrypt requires the Debian installer path."
+    [ -z "${cloud_data-}${img-}${iso-}${boot_wim-}" ] || error_and_exit "--encrypt does not support cloud-data or alternate image sources."
+    [ -s "$crypto_public_key_file" ] || error_and_exit "--encrypt requires a plain public SSH key."
+    echo "After installer reboot, verify SSH host key out-of-band; connect with ssh -tt -p ${ssh_port:-22} and run /usr/local/sbin/reinstall-luks-passphrase. Target initramfs unlock port: $unlock_port."
 fi
 
 if ! is_netboot_xyz && [ -z "$ssh_keys" ] && [ -z "$password" ]; then

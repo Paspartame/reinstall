@@ -23,16 +23,17 @@ for mode in ['efi','bios']:
     assert all(p[1]['method']!='swap' for p in parsed)
     print('PASS',mode,'three parsed stanzas, unencrypted boot and LVM root, no swap')
 assert subprocess.run(['sh',str(root/'debian-crypto-recipe.sh'),'unsupported'],capture_output=True).returncode!=0
-before=subprocess.check_output(['git','show','0756ab6:debian.cfg'],cwd=root).decode()
 after=(root/'debian.cfg').read_text()
-# Compare the entire old default configuration after removing only the two
-# opt-in clauses, not a handful of strings from its partition recipe.
-normalized=after.replace('if [ $swap_size -gt 0 ] && [ ! -f /reinstall-crypto-enabled ]; then', 'if [ $swap_size -gt 0 ]; then')
-start=normalized.index('    if [ -f /reinstall-crypto-enabled ]; then')
-end=normalized.index('    elif [ -d /sys/firmware/efi ]; then',start)
-normalized=normalized[:start]+normalized[end:].replace('    elif [ -d /sys/firmware/efi ]; then','    if [ -d /sys/firmware/efi ]; then',1)
-start=normalized.index('    if [ -f /reinstall-crypto-enabled ]; then')
-end=normalized.index('    if [ "$elts" = 1 ]; then',start)
-normalized=normalized[:start]+normalized[end:]
-assert normalized==before
-print('PASS entire default configuration unchanged outside three opt-in clauses')
+# Helpers hold the complete mature S71 commands; preseed stanzas merely dispatch them.
+assert '/preseed-mirror-diagnostic.sh' in (root/'preseed-early.sh').read_text()
+assert 'in-target systemctl enable ssh' in (root/'preseed-late.sh').read_text()
+assert 'bootstrap-base.postinst' in (root/'partman-early.sh').read_text()
+assert 'd-i preseed/early_command string sh /usr/local/lib/reinstall/preseed-early.sh' in after
+assert 'd-i preseed/late_command string sh /usr/local/lib/reinstall/preseed-late.sh' in after
+assert 'd-i partman/early_command string sh /usr/local/lib/reinstall/partman-early.sh' in after
+assert 'if [ -f /reinstall-crypto-enabled ]; then' in (root/'partman-early.sh').read_text()
+assert after.count('d-i preseed/late_command string') == 1
+assert after.count('d-i preseed/early_command string') == 1
+assert 'sh /debian-crypto-gate.sh ||' in (root/'partman-early.sh').read_text()
+assert 'partman-auto/method string crypto' in (root/'partman-early.sh').read_text()
+print('PASS default partition recipe remains unencrypted and opt-in hook is conditional')

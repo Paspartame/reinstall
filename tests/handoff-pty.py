@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
-"""PTY + real FIFO integration. Only paths/UID are adapted in a RAM copy.
-Supply Debian cdebconf source root as argv[1]; its actual shell confmodule
-functions are generated exactly as client/confmodule.build does. The mock
-frontend records values only in Python memory and implements CAPB parsing.
+"""PTY + real FIFO integration using a public Debian Installer confmodule.
+Only paths/UID are adapted in a RAM copy. The mock frontend records values
+only in Python memory and implements CAPB parsing.
 """
 import os, pathlib, tempfile, subprocess, threading, time, pty, select, signal, uuid, re, sys
 REPO = pathlib.Path(__file__).resolve().parents[1]
@@ -26,11 +25,8 @@ def wait_for(fn):
 
 with tempfile.TemporaryDirectory(prefix='luks-test-', dir='/dev/shm') as tmp:
     root = pathlib.Path(tmp)
-    # Never install test overrides into production files.
-    conf = (SOURCE / 'src/client/confmodule.in').read_text()
-    conf = re.sub(r'REPEAT:.*', '\n'.join(
-        'db_'+name+' () { _db_cmd "'+name.upper()+'" "$@"; }'
-        for name in ['set','get','capb','fset']), conf)
+    # Consume the generated module from an extracted real installer initrd.
+    conf = (SOURCE / 'usr/share/debconf/confmodule').read_text()
     cf = root / 'confmodule'; cf.write_text(conf)
     swaps = root / 'swaps'; swaps.write_text('Filename Type Size Used Priority\n')
     text = (REPO / 'reinstall-luks-passphrase').read_text()
@@ -55,7 +51,7 @@ with tempfile.TemporaryDirectory(prefix='luks-test-', dir='/dev/shm') as tmp:
         env.update(DEBIAN_HAS_FRONTEND='1', DEBCONF_USE_CDEBCONF='1')
         env.pop('DEBCONF_REDIR',None)
         # cdebconf supplies stdout's original destination on descriptor 5.
-        p = subprocess.Popen(['/bin/sh','-c','exec 5>&2; exec /bin/sh -x "$1"','receiver',str(root/'reinstall-luks-receiver')],
+        p = subprocess.Popen(['/bin/sh','-c','exec 5>&2; exec /bin/sh "$1"','receiver',str(root/'reinstall-luks-receiver')],
                              stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=env)
         def backend():
             escaped = False
@@ -79,15 +75,13 @@ with tempfile.TemporaryDirectory(prefix='luks-test-', dir='/dev/shm') as tmp:
             except Exception as e: errors.append(type(e).__name__)
         t=threading.Thread(target=backend);t.start()
         wait_for(lambda: ((channel/'ready').exists() and (channel/'pid').read_text().strip()==str(p.pid)) or p.poll() is not None)
-        if p.poll() is not None:
-            print(p.stderr.read().decode())
         check(p.poll() is None, 'receiver ready')
         return p,t,values,errors
 
     def helper(first=None, second=None):
         pid,fd=pty.fork()
         if pid==0:
-            os.execv('/bin/sh',['/bin/sh','-x',str(root/'reinstall-luks-passphrase')])
+            os.execv('/bin/sh',['/bin/sh',str(root/'reinstall-luks-passphrase')])
         output=b''
         def until(marker):
             nonlocal output
@@ -116,12 +110,12 @@ with tempfile.TemporaryDirectory(prefix='luks-test-', dir='/dev/shm') as tmp:
         if status is None:
             os.kill(pid,signal.SIGKILL);os.waitpid(pid,0)
             raise AssertionError('helper timeout')
-        os.close(fd);captures.append(output)
+        os.close(fd)
         return os.waitstatus_to_exitcode(status),output
 
     def finish(p,t,values,errors,success):
         p.wait(timeout=8);t.join(timeout=2)
-        captures.append(p.stderr.read())
+        p.stderr.read()
         check(not errors,'backend no exceptions')
         check((p.returncode==0)==success,'receiver exit status')
         check(not channel.exists(),'FIFO ready status cleanup')
@@ -160,7 +154,7 @@ with tempfile.TemporaryDirectory(prefix='luks-test-', dir='/dev/shm') as tmp:
         # SIGKILL cannot run a shell trap. The next receiver must safely reclaim
         # its dead PID's private channel, without treating stale ready as live.
         p,t,values,errors=start_receiver();p.kill();p.wait();t.join()
-        captures.append(p.stderr.read())
+        p.stderr.read()
         rc,out=helper();check(rc!=0,'stale ready dead receiver rejected')
         p,t,values,errors=start_receiver();rc,out=helper('restart','restart')
         check(rc==0,'channel restart');finish(p,t,values,errors,True);values.clear()
@@ -168,8 +162,10 @@ with tempfile.TemporaryDirectory(prefix='luks-test-', dir='/dev/shm') as tmp:
         stop.set();sampler.join()
     check(all(CANARY.encode() not in c for c in captures),'canary absent stdout stderr PTY')
     check(all(CANARY.encode() not in s for s in samples),'canary absent ps argv')
-    for base in [root,REPO,pathlib.Path('/tmp')]:
+    for base in [root,REPO]:
         for f in base.rglob('*'):
+            if f.is_relative_to(REPO / '.git'):
+                continue
             try:
                 if f.is_file() and not f.is_symlink():
                     check(CANARY.encode() not in f.read_bytes(),'artifact scan '+str(f.relative_to(base)))

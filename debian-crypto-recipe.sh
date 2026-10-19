@@ -5,11 +5,11 @@ set -eu
 [ "$#" = 1 ] || exit 2
 case "$1" in
     efi)
-        printf '%s\n' 'reinstall-crypto ::' \
+        printf '%s\n' 'reinstall-crypto :' \
             '106 1 106 free $iflabel{ gpt } $reusemethod{ } method{ efi } format{ } .'
         ;;
     bios)
-        printf '%s\n' 'reinstall-crypto ::' \
+        printf '%s\n' 'reinstall-crypto :' \
             '1 1 1 free $iflabel{ gpt } method{ biosgrub } .'
         ;;
     *) exit 2;;

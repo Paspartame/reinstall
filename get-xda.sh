@@ -18,7 +18,7 @@ get_xda() {
     fi
 
     for disk in $(get_all_disks); do
-        if fdisk -l "/dev/$disk" | grep -iq "$main_disk"; then
+        if { [ -f /reinstall-crypto-enabled ] && [ "$(cat "/sys/class/block/$disk/serial" 2>/dev/null)" = "$main_disk" ]; } || fdisk -l "/dev/$disk" | grep -iq "$main_disk"; then
             echo "$disk"
             return
         fi
