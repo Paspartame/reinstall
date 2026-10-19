@@ -5565,6 +5565,14 @@ if is_need_boot_vmlinuz; then
     vmlinuz=${dir}reinstall-vmlinuz
     initrd=${dir}reinstall-initrd
     firmware=${dir}reinstall-firmware
+    # An encrypted root is not readable by the bootloader. The supported
+    # encrypted flow requires a separate unencrypted /boot for its next installer.
+    if [ "${encrypt:-0}" = 1 ] && is_boot_in_separate_partition; then
+        install -m 0644 /reinstall-vmlinuz /boot/reinstall-crypto-vmlinuz
+        install -m 0600 /reinstall-initrd /boot/reinstall-crypto-initrd
+        vmlinuz=/reinstall-crypto-vmlinuz
+        initrd=/reinstall-crypto-initrd
+    fi
 
     # 设置 linux initrd 命令
     if is_use_local_extlinux; then
