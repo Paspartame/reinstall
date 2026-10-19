@@ -1,5 +1,23 @@
 # Experimental Debian 13 encrypted reinstall
 
+## Immutable full-checkout distribution
+
+Never download reinstall.sh alone for encrypted mode. Before any later owner-authorized publication, choose a reviewed immutable commit from this feature branch, publish that exact commit to the configured Fork `https://github.com/Paspartame/reinstall.git`, then use:
+
+```sh
+git clone https://github.com/Paspartame/reinstall.git
+cd reinstall
+git checkout --detach <REVIEWED_PUBLISHED_COMMIT>
+# Install only on the intended disposable test machine, not the development host:
+apt-get update && apt-get install -y python3 busybox-static openssh-client curl cpio gzip
+```
+
+Publication has NOT happened in S81. The commit placeholder must be replaced with the actual published hash, never main/latest. Adjacent executable/network/preseed helpers come from the checkout. Legacy optional logviewer/frpc resources still reference upstream main; immutable source routing for those paths remains a release limitation. Do not claim a closed release bundle yet.
+
+**IRREVERSIBLE DISK ERASURE:** the subsequent reinstall command destroys the selected machine's partitions. Verified backups, provider rescue console and separately pinned SSH host identities are required. Open the normal SSH and initramfs unlock ports in provider firewall/security groups. Every encrypted reboot requires manual remote unlock before normal SSH is available.
+
+S81 explicitly rejects encrypted EFI; supported local evidence is BIOS amd64 DHCP only. Static IPv4/gateways are configuration-derived but not provider-tested, IPv6-only is rejected, cloud firewalls/custom routing/provider rescue behavior are not certified. Do not use this on a normal production VPS based solely on QEMU results.
+
 **Local native CLI E2E validated in S80; not VPS-certified.** Fresh guardless root CLI self-reinstall and both same-disk unlock boots passed in disposable BIOS QEMU. No production deployment approved.
 
 ```sh
