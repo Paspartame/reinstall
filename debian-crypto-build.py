@@ -85,18 +85,23 @@ def build(repo, root, facts, keys, port=2222, busybox=None):
             for utility in ('stat','base64','mkfifo','awk'):
                 (applet_dir/utility).symlink_to('../busybox')
         # Publish staged payload while permitting replacement of the two canonical preseed names and helpers.
+        backups = stage/'private-backups'
+        backups.mkdir(mode=0o700)
         created = []
         replaced = []
         try:
-            for p in stage.rglob('*'):
+            for p in list(stage.rglob('*')):
+                if backups in p.parents:continue
                 if not p.is_file():
                     continue
                 out = root/p.relative_to(stage)
                 if out.exists() or out.is_symlink():
                     if out.relative_to(root).as_posix() not in ('actualdebian.cfg', 'preseed.cfg', 'debian-crypto-cleanup.sh', 'debian-crypto-gate.sh', 'debian-crypto-recipe.sh', 'usr/local/sbin/reinstall-luks-receiver', 'usr/local/sbin/reinstall-luks-passphrase', 'usr/local/sbin/debian-unlock-install.sh', 'usr/local/lib/reinstall/preseed-early.sh', 'usr/local/lib/reinstall/preseed-late.sh', 'usr/local/lib/reinstall/partman-early.sh', 'usr/local/lib/reinstall/busybox', 'usr/local/lib/reinstall/debian-unlock-network.sh', 'usr/local/lib/reinstall/debian-unlock-hook.sh', 'usr/local/lib/reinstall/initrd-network.sh', 'usr/local/lib/reinstall/applets/awk', 'usr/local/lib/reinstall/applets/base64', 'usr/local/lib/reinstall/applets/mkfifo', 'usr/local/lib/reinstall/applets/stat', 'etc/reinstall-unlock/network.conf', 'etc/reinstall-unlock/authorized_keys', 'etc/reinstall-crypto/partman-recipe-bios', 'etc/reinstall-crypto/partman-recipe-efi', 'etc/dropbear/initramfs/dropbear.conf', 'etc/dropbear/initramfs/authorized_keys'):
                         raise ValueError('refusing to overwrite initrd path: '+str(out.relative_to(root)))
-                    backup=pathlib.Path(tempfile.mktemp(prefix='existing-backup-'))
-                    shutil.copyfile(out,backup); replaced.append((out,backup))
+                    if out.is_symlink():raise ValueError('refusing symlink replacement')
+                    fd,name=tempfile.mkstemp(prefix='file-',dir=backups);os.close(fd)
+                    backup=pathlib.Path(name)
+                    shutil.copy2(out,backup); replaced.append((out,backup))
                 out.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(p, out); out.chmod(p.stat().st_mode & 0o777)
                 created.append(out)
@@ -104,7 +109,8 @@ def build(repo, root, facts, keys, port=2222, busybox=None):
             if marker.exists() or marker.is_symlink():
                 if marker.is_symlink() or not marker.is_file():
                     raise ValueError('refusing non-regular opt-in marker')
-                marker_backup=pathlib.Path(tempfile.mktemp(prefix='existing-marker-'))
+                fd,name=tempfile.mkstemp(prefix='marker-',dir=backups);os.close(fd)
+                marker_backup=pathlib.Path(name)
                 shutil.copyfile(marker,marker_backup); replaced.append((marker,marker_backup))
             marker.write_text('opt-in\n'); marker.chmod(0o600)
             created.append(marker)
@@ -112,7 +118,7 @@ def build(repo, root, facts, keys, port=2222, busybox=None):
             for out in reversed(created):
                 out.unlink(missing_ok=True)
             for out,backup in replaced:
-                shutil.copyfile(backup,out); backup.unlink(missing_ok=True)
+                shutil.copy2(backup,out); backup.unlink(missing_ok=True)
             raise
     return sorted(str(p.relative_to(root)) for p in root.rglob('*') if p.is_file())
 

@@ -3,7 +3,12 @@
 import pathlib,shutil,struct,subprocess,tempfile,os
 
 def resolve(candidate=None):
-    path=pathlib.Path(candidate or shutil.which('busybox') or '/usr/bin/busybox')
+    path=pathlib.Path(candidate or '/usr/bin/busybox').resolve()
+    if os.geteuid()==0:
+        for node in (path,*path.parents):
+            st=node.stat()
+            if st.st_uid!=0 or st.st_mode & 0o022:
+                raise ValueError('Privileged BusyBox must be root-owned under non-writable administrator paths.')
     if not path.is_file():
         raise ValueError('Install trusted distro busybox-static and python3 first (Debian: apt install busybox-static python3).')
     data=path.read_bytes()
