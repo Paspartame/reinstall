@@ -208,7 +208,9 @@ curl() {
     # centos 7 curl 不支持 --retry-connrefused --retry-all-errors
     # 因此手动 retry
     for i in $(seq 5); do
-        if command curl --insecure --connect-timeout 10 -f "$@"; then
+        if [ "${encrypt:-0}" = 1 ]; then
+            command curl --connect-timeout 10 -f "$@" && return 0
+        elif command curl --insecure --connect-timeout 10 -f "$@"; then
             return
         else
             ret=$?
@@ -3833,12 +3835,14 @@ mod_initrd_debian_kali() {
         cmp "$confhome_local/debian.cfg" "$initrd_dir/actualdebian.cfg" || error_and_exit "Composed preseed mismatch."
     fi
     if [ "$distro" = debian ] && [ "$releasever" = 13 ]; then
+        if [ "${encrypt:-0}" = 1 ]; then
         mkdir -p "$initrd_dir/usr/local/lib/reinstall"
         for helper in preseed-early.sh preseed-late.sh partman-early.sh preseed-mirror-diagnostic.sh; do
             [ -f "$confhome_local/$helper" ] || error_and_exit "Preseed helper missing: $helper"
             cp "$confhome_local/$helper" "$initrd_dir/usr/local/lib/reinstall/$helper"
             chmod 0755 "$initrd_dir/usr/local/lib/reinstall/$helper"
         done
+        fi
     fi
     # hack 1
     # 允许设置 ipv4 onlink 网关
@@ -5394,7 +5398,11 @@ if [ -n "${encrypt-}" ]; then
     confhome_local=$(dirname "$THIS_SCRIPT")
     crypto_static_busybox=$(python3 "$confhome_local/debian-crypto-runtime.py") || error_and_exit "Install trusted busybox-static and python3 before --encrypt."
     # Keep the encryption branch fail-closed until fork-generated guest validation.
-    # Native CLI candidate: enabled for the controlled guardless release test.
+    if is_efi; then error_and_exit "--encrypt currently supports tested BIOS amd64 only; EFI is not validated."; fi
+    # Full immutable checkout is required; crypto composition sources adjacent files.
+    for required in trans.sh initrd-network.sh get-xda.sh ttys.sh fix-eth-name.sh fix-eth-name.service debian.cfg preseed-early.sh preseed-late.sh partman-early.sh; do
+        [ -f "$confhome_local/$required" ] || error_and_exit "Incomplete encrypted checkout: $required"
+    done
     [ "$distro" = debian ] && [ "$releasever" = 13 ] || error_and_exit "--encrypt supports Debian 13 only."
     [ -n "$ssh_keys" ] || error_and_exit "--encrypt requires --ssh-key with a usable public key."
     [ -n "$installer" ] && [ -z "${cloud_image-}" ] || error_and_exit "--encrypt requires the Debian installer path."
