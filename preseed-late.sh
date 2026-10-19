@@ -117,3 +117,10 @@ true; \
         echo 'KERNEL=="vd*[a-z]", ACTION=="add|change", SUBSYSTEM=="block", RUN+="/bin/sh -c '\''/bin/echo 512 > /sys/%p/queue/max_sectors_kb'\''"' >/target/etc/udev/rules.d/80-max-sectors-blk.rules; \
         in-target update-initramfs -u -k all; \
     fi
+
+# Encrypted installs must hand public identities to the operator before reboot.
+if [ -f /reinstall-crypto-enabled ]; then
+    touch /run/reinstall-identity-ready
+    echo 'Encrypted install ready: collect target public host keys, then touch /run/reinstall-identity-continue through authenticated Installer SSH.' >/dev/console
+    while [ ! -f /run/reinstall-identity-continue ]; do sleep 2; done
+fi

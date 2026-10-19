@@ -3834,6 +3834,11 @@ mod_initrd_debian_kali() {
         cp "$confhome_local/debian.cfg" "$initrd_dir/preseed.cfg"
         chmod 0644 "$initrd_dir/actualdebian.cfg" "$initrd_dir/preseed.cfg"
         install -m 0755 "$confhome_local/installer-screen.sh" "$initrd_dir/installer-screen.sh"
+        # Establish Installer identity over the still-authenticated original OS.
+        mkdir -p "$initrd_dir/etc/ssh"
+        ssh-keygen -q -t ed25519 -N '' -f "$initrd_dir/etc/ssh/ssh_host_ed25519_key"
+        echo 'Installer SSH identity (record before reboot):'
+        cat "$initrd_dir/etc/ssh/ssh_host_ed25519_key.pub"
         cmp "$confhome_local/debian.cfg" "$initrd_dir/actualdebian.cfg" || error_and_exit "Composed preseed mismatch."
     fi
     if [ "$distro" = debian ] && [ "$releasever" = 13 ]; then
