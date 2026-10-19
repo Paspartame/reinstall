@@ -40,9 +40,10 @@ touch /tmp/S70_PRESEED_EARLY_COMMAND; echo S70_PRESEED_EARLY_COMMAND >/dev/conso
     chmod +s /usr/bin/screen; \
 
     if [ -f /reinstall-crypto-enabled ]; then \
-        session=$(SCREEN_QUERY_ONLY=1 sh /installer-screen.sh) || exit 1; \
-        screen -S "root/$session" -X multiuser on; \
-        screen -S "root/$session" -X acladd "$username"; \
+        if session=$(SCREEN_QUERY_ONLY=1 sh /installer-screen.sh); then \
+            screen -S "root/$session" -X multiuser on; \
+            screen -S "root/$session" -X acladd "$username"; \
+        fi; \
     elif screen -ls root/ >/dev/null 2>&1; then \
         screen -x root/ -X multiuser on; \
         screen -x root/ -X acladd "$username"; \
