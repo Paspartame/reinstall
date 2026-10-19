@@ -19,8 +19,15 @@ done
 ip link set dev lo up
 ip link set dev "$ethx" up
 if [ "$dhcpv4" = 1 ]; then
-    ipconfig -t 30 -c dhcp -d "$ethx"
-else
+    # klibc DHCP may time out even where normal Debian DHCP succeeds.
+    # Stored facts are validated by the installer and MAC-bound above.
+    ipconfig -t 30 -c dhcp -d "$ethx" || true
+fi
+if ! is_have_ipv4; then
+    [ -n "$ipv4_addr" ] && [ -n "$ipv4_gateway" ] || exit 1
+    # Preserve a complete DHCP lease; otherwise use the recorded complete pair.
+    ip -4 addr flush scope global dev "$ethx"
+    ip -4 route flush dev "$ethx"
     add_missing_ipv4_config
 fi
 is_have_ipv4 || exit 1
