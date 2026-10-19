@@ -187,6 +187,17 @@ show_url_in_args() {
 }
 
 curl() {
+    if [ "${encrypt:-0}" = 1 ]; then
+        local url="${@: -1}" name out
+        case "$url" in "$confhome/"*)
+            name=${url#"$confhome/"}
+            case "$name" in trans.sh|initrd-network.sh|fix-eth-name.sh|fix-eth-name.service|get-xda.sh|ttys.sh|logviewer.html|get-frpc-url.sh|frpc.service)
+                [ -f "$(dirname "$THIS_SCRIPT")/$name" ] || error_and_exit "Committed helper missing: $name"
+                if [ "$1" = -Lo ]; then out=$2; else out=$name; fi
+                cp "$(dirname "$THIS_SCRIPT")/$name" "$out"; return;;
+            esac;;
+        esac
+    fi
     is_have_cmd curl || install_pkg curl
 
     # 显示 url
@@ -3774,7 +3785,11 @@ mod_inittab_for_screen() {
         if ! grep -q "^$tty:" /etc/inittab &&
             [ -c "/dev/$tty" ] &&
             { stty -g -F "/dev/$tty" >/dev/null || echo >"/dev/$tty"; } 2>/dev/null; then
-            echo "$tty::respawn:screen -x root/ -p 1" >>/etc/inittab
+            if [ -f /reinstall-crypto-enabled ]; then
+                echo "$tty::respawn:sh /installer-screen.sh" >>/etc/inittab
+            else
+                echo "$tty::respawn:screen -x root/ -p 1" >>/etc/inittab
+            fi
         fi
     done
 }
@@ -3814,6 +3829,7 @@ mod_initrd_debian_kali() {
         cp "$confhome_local/debian.cfg" "$initrd_dir/actualdebian.cfg"
         cp "$confhome_local/debian.cfg" "$initrd_dir/preseed.cfg"
         chmod 0644 "$initrd_dir/actualdebian.cfg" "$initrd_dir/preseed.cfg"
+        install -m 0755 "$confhome_local/installer-screen.sh" "$initrd_dir/installer-screen.sh"
         cmp "$confhome_local/debian.cfg" "$initrd_dir/actualdebian.cfg" || error_and_exit "Composed preseed mismatch."
     fi
     if [ "$distro" = debian ] && [ "$releasever" = 13 ]; then

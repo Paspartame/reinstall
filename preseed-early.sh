@@ -39,7 +39,11 @@ touch /tmp/S70_PRESEED_EARLY_COMMAND; echo S70_PRESEED_EARLY_COMMAND >/dev/conso
     echo S73_PHASE_SCREEN >/dev/console; \
     chmod +s /usr/bin/screen; \
 
-    if screen -ls root/ >/dev/null 2>&1; then \
+    if [ -f /reinstall-crypto-enabled ]; then \
+        session=$(SCREEN_QUERY_ONLY=1 sh /installer-screen.sh) || exit 1; \
+        screen -S "root/$session" -X multiuser on; \
+        screen -S "root/$session" -X acladd "$username"; \
+    elif screen -ls root/ >/dev/null 2>&1; then \
         screen -x root/ -X multiuser on; \
         screen -x root/ -X acladd "$username"; \
     elif [ ! -f /reinstall-crypto-enabled ]; then \
@@ -59,7 +63,7 @@ touch /tmp/S70_PRESEED_EARLY_COMMAND; echo S70_PRESEED_EARLY_COMMAND >/dev/conso
             echo 'Option 1. View logs:'; \
             echo '    tail -fn+1 /var/log/syslog'; \
             echo 'Option 2. Attach to the installer:'; \
-            echo '    TERM=screen screen -x root/ -p 1'; \
+            if [ -f /reinstall-crypto-enabled ]; then echo '    TERM=screen sh /installer-screen.sh'; else echo '    TERM=screen screen -x root/ -p 1'; fi; \
             echo 'Option 3. Attach to the root shell if you are not root:'; \
             echo '    TERM=screen screen -x root/ -p 2'; \
         } >>/etc/motd; \
@@ -158,6 +162,7 @@ touch /tmp/S70_PRESEED_EARLY_COMMAND; echo S70_PRESEED_EARLY_COMMAND >/dev/conso
     if [ -f /reinstall-crypto-enabled ]; then \
         printf 'S74_HOSTKEY ' >/dev/console; \
         cat /etc/ssh/ssh_host_ed25519_key.pub >/dev/console; \
+        if [ -c /dev/ttyS0 ]; then { printf 'REINSTALL_INSTALLER_HOSTKEY '; cat /etc/ssh/ssh_host_ed25519_key.pub; } >/dev/ttyS0; fi; \
     fi; \
 
     if ls /configs/frpc.* >/dev/null 2>&1; then \
