@@ -38,7 +38,7 @@ while [ ! -f /run/reinstall-identity-ready ]; do
 done
 echo IDENTITY_READY
 label_file=/target/etc/reinstall-unlock/connection-label
-suggestion=$(cat "$label_file" 2>/dev/null || :)
+suggestion=$(cat "$label_file" 2>/dev/null || cat /etc/reinstall-unlock/connection-label 2>/dev/null || :)
 printf 'SSH connection address (DNS or IP) [%s]: ' "$suggestion"
 IFS= read -r host || exit 1
 host=${host:-$suggestion}
@@ -51,7 +51,7 @@ identity_display=$(mktemp /run/reinstall-public-identities.XXXXXX)
 identity_recheck=$(mktemp /run/reinstall-public-recheck.XXXXXX)
 ram=/target/run/reinstall-identity-ram
 mkdir -p "$ram"
-mountpoint -q "$ram" || mount -t tmpfs -o mode=0700,size=256m tmpfs "$ram"
+grep -qs " $ram " /proc/mounts || mount -t tmpfs -o mode=0700,size=256m tmpfs "$ram"
 trap 'umount "$ram" 2>/dev/null || :; rm -f "$identity_display" "$identity_recheck"; rm -rf "$lock"' EXIT
 chroot /target python3 /usr/local/lib/reinstall/reinstall-crypto-identities.py --verify-target --host "$host" >"$identity_display" || fail 'Final initramfs/SSH identity verification failed'
 cat "$identity_display"

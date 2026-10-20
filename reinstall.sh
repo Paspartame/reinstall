@@ -3875,6 +3875,8 @@ mod_initrd_debian_kali() {
         echo 'Installer SSH identity (record before reboot):'
         cat "$initrd_dir/etc/ssh/ssh_host_ed25519_key.pub"
         python3 "$confhome_local/reinstall-crypto-identities.py" --public-file "$initrd_dir/etc/ssh/ssh_host_ed25519_key.pub" --port "${ssh_port:-22}"
+        mkdir -p "$initrd_dir/etc/reinstall-unlock"
+        cp /etc/reinstall-unlock/connection-label "$initrd_dir/etc/reinstall-unlock/connection-label"
         cmp "$confhome_local/debian.cfg" "$initrd_dir/actualdebian.cfg" || error_and_exit "Composed preseed mismatch."
     fi
     if [ "$distro" = debian ] && [ "$releasever" = 13 ]; then

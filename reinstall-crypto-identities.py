@@ -14,6 +14,7 @@ def public(line):
 def label(value):
     try:return str(ipaddress.ip_address(value))
     except ValueError:pass
+    if re.fullmatch(r'[0-9.]+',value) or ':' in value:raise ValueError('Invalid IP literal')
     if len(value)>253 or not re.fullmatch(r'[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?',value):raise ValueError('Invalid DNS/IP label')
     if any(not re.fullmatch(r'[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?',x) for x in value.rstrip('.').split('.')):raise ValueError('Invalid DNS label')
     return value.lower()
