@@ -19,9 +19,13 @@ LUKS secret; at identity-ready collect and separately pin OS22/Dropbear2222
 public identities, compare final initrd, then release identity-continue.
 Each later encrypted boot needs manual pinned SSH/PTY unlock. Keep VNC/rescue.
 
-Pinned alternative: replace the branch segment in the download https://raw.githubusercontent.com/Paspartame/reinstall/refs/heads/feature/debian13-luks-dropbear/reinstall.sh with the
-full tested SHA from the accompanying source manifest. The entry script resolves
-its exact Git blob to a matching historical commit and refuses unmatched bytes.
+Pinned alternative (same tested script):
+
+```sh
+curl -fLo reinstall.sh 'https://raw.githubusercontent.com/Paspartame/reinstall/d536594506eb617ac5078f2569a4e8d7bcbac8f0/reinstall.sh' || wget -O reinstall.sh 'https://raw.githubusercontent.com/Paspartame/reinstall/d536594506eb617ac5078f2569a4e8d7bcbac8f0/reinstall.sh'
+```
+
+The entry script resolves byte-identical historical source and refuses unmatched content.
 A moving branch download can resolve an older identical script; the printed
 resolved SHA is authoritative. Whole-checkout and bootstrap remain secondary
 compatibility methods; neither is required for this quickstart.
