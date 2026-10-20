@@ -82,9 +82,9 @@ if [[ " $* " == *" --encrypt "* ]] && [ ! -f "$(dirname "$THIS_SCRIPT")/debian-c
     source_exit=$?
     if [ "$source_exit" = 0 ]; then
         echo 'PREPARED, NOT INSTALLED: Debian 13 amd64 BIOS encrypted root, unencrypted /boot; target disk WILL BE ERASED.'
-        echo 'Save the Installer public host key printed above on an independent controller; Installer SSH is port 22.'
-        echo 'Next: reboot manually. Use authenticated Installer SSH/PTY /usr/local/sbin/reinstall-luks-passphrase to enter/confirm a NEW LUKS secret.'
-        echo 'At /run/reinstall-identity-ready collect target OS22 and Dropbear public keys, verify final initrd, pin separately, then touch /run/reinstall-identity-continue.'
+        echo 'Save the Installer public key, SHA256 fingerprint and configured SSH port printed above.'
+        echo 'Next: reboot manually. Verify Installer identity with your SSH/WebSSH client, then run luks-wizard with PTY.'
+        echo 'Enter a NEW LUKS secret interactively. Save BOTH verified target identities and final-initrd digest, then explicitly type CONTINUE.'
         echo 'Every encrypted boot requires pinned SSH/PTY unlock on the selected Dropbear port. Never trust keyscan alone.'
     fi
     exit "$source_exit"

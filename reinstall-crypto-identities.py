@@ -52,6 +52,26 @@ def show(stage,key,host,port):
     if host=='REPLACE_WITH_YOUR_SSH_HOST':print('  TEMPLATE ONLY: replace with the actual host in your client; this is not a ready binding.')
 
 def run(*args):return subprocess.check_output(args,text=True,stderr=subprocess.DEVNULL).strip()
+def boot_selection(kernel):
+    # Narrow Debian BIOS contract: first generated entry, default zero, separate /boot.
+    text=pathlib.Path('/boot/grub/grub.cfg').read_text()
+    env=run('grub-editenv','/boot/grub/grubenv','list')
+    if env.strip():raise ValueError('Nonempty GRUB environment may override next boot')
+    defaults=re.findall(r'^\s*set default="([^"\n]+)"',text,re.M)
+    if defaults!=['${next_entry}','0']:raise ValueError('Unsupported GRUB default selection')
+    entries=re.split(r'^menuentry ',text,flags=re.M)
+    if len(entries)<2:raise ValueError('Missing default GRUB entry')
+    first=entries[1].split('\n}',1)[0]
+    linux=re.findall(r'^\s*linux\s+(\S+)',first,re.M)
+    initrds=re.findall(r'^\s*initrd\s+([^\n]+)',first,re.M)
+    if linux!=['/vmlinuz-'+kernel] or initrds!=['/initrd.img-'+kernel]:raise ValueError('GRUB kernel/initrd selection mismatch')
+    if run('findmnt','-n','-o','TARGET,FSTYPE','/boot')!='/boot ext4':raise ValueError('Independent ext4 /boot required')
+    k=pathlib.Path('/boot/vmlinuz-'+kernel)
+    i=pathlib.Path('/boot/initrd.img-'+kernel)
+    if not k.is_file() or not i.is_file() or k.is_symlink() or i.is_symlink():raise ValueError('Missing/indirect selected boot artifact')
+    if not 0<i.stat().st_size<=192*1024*1024:raise ValueError('Final initrd size outside supported bound')
+    return i,hashlib.sha256(text.encode()).hexdigest(),hashlib.sha256(k.read_bytes()).hexdigest()
+
 def verify():
     # Actual configured OpenSSH key, not merely a potentially stale .pub file.
     cfg=run('/usr/sbin/sshd','-T').splitlines()
@@ -60,7 +80,9 @@ def verify():
     if keypath not in paths:raise ValueError('Configured OpenSSH Ed25519 identity missing')
     oskey=run('ssh-keygen','-y','-f',keypath)
     if public(oskey)[0]!=public(pathlib.Path(keypath+'.pub').read_text())[0]:raise ValueError('OpenSSH public/private mismatch')
-    osport=int(next(x.split()[1] for x in cfg if x.startswith('port ')))
+    ports=[int(x.split()[1]) for x in cfg if x.startswith('port ')]
+    if len(ports)!=1 or not 1<=ports[0]<=65535:raise ValueError('Ambiguous OpenSSH port')
+    osport=ports[0]
     drop='/etc/dropbear/initramfs/dropbear_ed25519_host_key'
     output=run('dropbearkey','-y','-f',drop)
     keys=[x for x in output.splitlines() if x.startswith('ssh-ed25519 ')]
@@ -69,13 +91,15 @@ def verify():
     conf=pathlib.Path('/etc/dropbear/initramfs/dropbear.conf').read_text()
     match=re.search(r'(?:^|[\s\"\x27])-p\s+(\d+)',conf)
     if not match:raise ValueError('Dropbear port not established')
-    port=int(match[1]);host=choose_host(HOST_OVERRIDE)
+    matches=re.findall(r'(?:^|[\s\"\x27])-p\s+(\d+)',conf)
+    if len(matches)!=1 or not 1<=int(matches[0])<=65535:raise ValueError('Ambiguous Dropbear port')
+    port=int(matches[0]);host=choose_host(HOST_OVERRIDE)
     # Exactly one installed kernel expected in this supported installer flow.
     kernels=list(pathlib.Path('/lib/modules').iterdir())
     if len(kernels)!=1:raise ValueError('Ambiguous final kernel')
     ram=pathlib.Path('/run/reinstall-identity-ram')
     if run('stat','-f','-c','%T',str(ram))!='tmpfs':raise ValueError('Identity extraction must be tmpfs')
-    initrd=pathlib.Path('/boot/initrd.img-'+kernels[0].name)
+    initrd,grub_digest,kernel_digest=boot_selection(kernels[0].name)
     before=hashlib.sha256(initrd.read_bytes()).hexdigest()
     with tempfile.TemporaryDirectory(prefix='identity-',dir=str(ram)) as td:
         subprocess.run(['unmkinitramfs','/boot/initrd.img-'+kernels[0].name,td+'/tree'],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=90)
@@ -84,6 +108,9 @@ def verify():
             if a.read_bytes()!=b.read_bytes():raise ValueError('Final initrd payload/identity mismatch')
     after=hashlib.sha256(initrd.read_bytes()).hexdigest()
     if before!=after:raise ValueError('Final initrd changed during verification')
+    if boot_selection(kernels[0].name)!=(initrd,grub_digest,kernel_digest):raise ValueError('Selected boot configuration changed during verification')
+    print('Selected GRUB kernel/initrd: /boot/vmlinuz-'+kernels[0].name+' '+str(initrd))
+    print('Verified GRUB SHA256: '+grub_digest+' kernel SHA256: '+kernel_digest)
     print('Verified final initrd SHA256: '+after)
     show('DROPBEAR INITRAMFS SSH',dbkey,host,port)
     show('INSTALLED DEBIAN SSH',oskey,host,osport)

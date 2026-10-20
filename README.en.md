@@ -1,3 +1,36 @@
+<!-- S96 workflow; main URL is usable only after verified S96 main publication. -->
+## Debian 13 encrypted install (narrow Experimental support)
+
+Debian 13 amd64 legacy BIOS and reachable IPv4 only. Separate ext4 `/boot`,
+LUKS2/LVM/ext4 root, no swap. Verify release status before using main.
+
+```sh
+apt-get update && apt-get install -y curl
+curl -fLO 'https://raw.githubusercontent.com/Paspartame/reinstall/main/reinstall.sh'
+bash reinstall.sh debian 13 --installer --encrypt --ssh-key github:YOUR_GITHUB_USER --ssh-port 22 --unlock-port 2222
+# Save Installer host public key + SHA256 fingerprint through trusted old OS SSH.
+# Reboot manually ONLY when preparation succeeded and recovery is available:
+reboot
+```
+
+Optional `--username` overrides the existing username prompt (blank means root).
+Client login public key is NOT the server host public key; keep client private
+keys off the VPS. Verify Installer host fingerprint before entering secrets.
+MOTD: `luks-wizard` (long alias `reinstall-crypto-wizard` remains). PTY required.
+Choose the actual SSH DNS/IP label, enter/confirm a NEW hidden LUKS passphrase,
+disconnect/reconnect safely while installing, save BOTH final fingerprints and
+the adjacent Dropbear/Debian known_hosts records, then type `CONTINUE`.
+The verifier checks selected GRUB boot artifacts and the full final initrd digest
+again before release. This is handoff integrity, not hypervisor/root attestation.
+Installer and installed Debian reuse port22 with distinct keys: independently
+verify and retire the Installer record rather than blindly accepting a change.
+Same-port Dropbear/Debian requires separate stage trust files/aliases, not a
+combined two-key trust set. Every boot requires pinned Dropbear PTY unlock,
+then separately pinned normal Debian SSH. VNC/Rescue fallback is required.
+No ForceCommand, local helper or Termix plugin; a client without enforceable
+host-key verification is unsuitable. UEFI/IPv6-only/cold power not certified.
+Older bootstrap is an alternative; expert/manual commands below remain available.
+
 <!-- markdownlint-disable MD028 MD033 MD045 -->
 
 ## Direct single-script encrypted preparation (Experimental)
