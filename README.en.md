@@ -1,66 +1,48 @@
-<!-- S96 workflow; main URL is usable only after verified S96 main publication. -->
-## Debian 13 encrypted install (narrow Experimental support)
+## Owner-fork encrypted Debian 13 (Experimental)
 
-Debian 13 amd64 legacy BIOS and reachable IPv4 only. Separate ext4 `/boot`,
-LUKS2/LVM/ext4 root, no swap. Verify release status before using main.
+Recommended after verified main publication (before then: NOT YET PUBLISHED).
+Debian 13 / amd64 / legacy BIOS / reachable IPv4 only. ERASES target disk.
+Back up data and verify current provider VNC/Rescue first.
 
 ```sh
 apt-get update && apt-get install -y curl
-curl -fLO 'https://raw.githubusercontent.com/Paspartame/reinstall/main/reinstall.sh'
+curl -fLO https://raw.githubusercontent.com/Paspartame/reinstall/main/reinstall.sh
 bash reinstall.sh debian 13 --installer --encrypt --ssh-key github:YOUR_GITHUB_USER --ssh-port 22 --unlock-port 2222
-# Save Installer host public key + SHA256 fingerprint through trusted old OS SSH.
-# Reboot manually ONLY when preparation succeeded and recovery is available:
+# Review PREPARED and save Installer host public key + SHA256 fingerprint.
+# Only then reboot manually when recovery is available:
 reboot
 ```
 
-Optional `--username` overrides the existing username prompt (blank means root).
-Client login public key is NOT the server host public key; keep client private
-keys off the VPS. Verify Installer host fingerprint before entering secrets.
-MOTD: `luks-wizard` (long alias `reinstall-crypto-wizard` remains). PTY required.
-Choose the actual SSH DNS/IP label, enter/confirm a NEW hidden LUKS passphrase,
-disconnect/reconnect safely while installing, save BOTH final fingerprints and
-the adjacent Dropbear/Debian known_hosts records, then type `CONTINUE`.
-The verifier checks selected GRUB boot artifacts and the full final initrd digest
-again before release. This is handoff integrity, not hypervisor/root attestation.
-Installer and installed Debian reuse port22 with distinct keys: independently
-verify and retire the Installer record rather than blindly accepting a change.
-Same-port Dropbear/Debian requires separate stage trust files/aliases, not a
-combined two-key trust set. Every boot requires pinned Dropbear PTY unlock,
-then separately pinned normal Debian SSH. VNC/Rescue fallback is required.
-No ForceCommand, local helper or Termix plugin; a client without enforceable
-host-key verification is unsuitable. UEFI/IPv6-only/cold power not certified.
-Older bootstrap is an alternative; expert/manual commands below remain available.
-
-<!-- markdownlint-disable MD028 MD033 MD045 -->
-
-## Direct single-script encrypted preparation (Experimental)
-
-Debian 13 / amd64 / BIOS / IPv4 only. Install curl normally if absent. This
-ERASES the intended target disk after the manually selected installer boot.
-
-```sh
-curl -fLO 'https://raw.githubusercontent.com/Paspartame/reinstall/refs/heads/feature/debian13-luks-dropbear/reinstall.sh' || wget -O reinstall.sh 'https://raw.githubusercontent.com/Paspartame/reinstall/refs/heads/feature/debian13-luks-dropbear/reinstall.sh'
-bash reinstall.sh debian 13 --installer --encrypt --ssh-key github:YOUR_GITHUB_USER --unlock-port 2222 --username root
-```
-
-The single script automatically retrieves a byte-matched complete Fork revision,
-prints its full SHA, installs signed Debian dependencies and stages the native
-installer. It returns PREPARED, not installed; it never reboots automatically.
-Save/pin the printed Installer public identity on an independent controller,
-then run `reboot`. Through authenticated Installer SSH/PTY enter/confirm a NEW
-LUKS secret; at identity-ready collect and separately pin OS22/Dropbear2222
-public identities, compare final initrd, then release identity-continue.
-Each later encrypted boot needs manual pinned SSH/PTY unlock. Keep VNC/rescue.
-
-Advanced immutable download: choose the full SHA from the published evidence,
-download `https://raw.githubusercontent.com/Paspartame/reinstall/$REV/reinstall.sh`,
-then run `REINSTALL_SOURCE_REF="$REV" bash reinstall.sh debian 13 --installer --encrypt --ssh-key github:YOUR_GITHUB_USER --unlock-port 2222 --username root`.
-Default acquisition resolves the current whole branch commit and compares entry
-bytes; helper-only changes are included. A mismatch refuses preparation: download
-again or explicitly select the immutable matching revision. Whole-checkout and
-old bootstrap remain secondary compatibility methods.
-
-
+Use your own client PUBLIC key; private key stays in your SSH/WebSSH client.
+Optional `--username` overrides the prompt; blank selects root. A local public-key
+file also works. Main standalone entry obtains the complete matching main tree;
+`REINSTALL_SOURCE_REF=<full40SHA>` supports immutable matching downloads. Before
+main publication select `REINSTALL_SOURCE_BRANCH=feature/debian13-luks-dropbear`
+with the matching pinned feature entry. Stale entry/source mismatch refuses.
+Installer MOTD prompts `luks-wizard`; `reinstall-crypto-wizard` remains available.
+No forced login wizard, local controller helper or Termix plugin. Real PTY is
+required. Verify independently saved Installer host identity BEFORE secret input.
+Client login keys, server host keys and SHA256 fingerprints are different things.
+Choose the actual connection DNS/IP, then enter/confirm a NEW hidden LUKS secret.
+An interrupted pre-commit interaction permits at most three receiver attempts;
+reconnect and rerun the wizard. Exhaustion or unsafe stale state fails closed:
+use authenticated expert shell/VNC to inspect partman; never force the gate.
+After successful commit it is safe to disconnect/reconnect while installing.
+At identity-ready verify selected GRUB boot filesystem/kernel/initrd and full
+initrd SHA256, save BOTH Dropbear/Debian public keys and fingerprints. The COPY
+block has exactly two adjacent known_hosts records, Dropbear first, Debian second.
+Type `CONTINUE` deliberately; verification repeats before gate release. Display
+alone does not establish client trust. NO, disconnect or mismatch stays paused.
+Installer and Debian normally share22 with different host keys: independently
+verify and retire the Installer record, never blindly accept a changed key.
+Equal Dropbear/Debian ports require separate stage trust files/aliases, not a
+combined conflicting record set. Each encrypted boot needs pinned Dropbear PTY
+unlock, followed by separately pinned normal Debian SSH. Independent ext4 /boot,
+LUKS2 -> LVM -> ext4 root, no swap. No unattended unlock or pre-reboot LUKS secret.
+Defaults22/2222 are E2E-tested. Custom listeners/auth/format have focused tests,
+NOT a full custom-port installation certification. UEFI, IPv6-only, all providers,
+cold-power cycles and actual Termix UI are unverified. A client without enforceable
+host-key verification is unsuitable. Older bootstrap/full clone are alternatives.
 
 # reinstall
 

@@ -11,12 +11,21 @@ set -eu
 . /usr/share/debconf/confmodule
 # Start the receiver with the existing frontend's reply FD, not /dev/null.
 exec 6<&0
-/usr/local/sbin/reinstall-luks-receiver <&6 &
-receiver=$!
-trap 'kill "$receiver" 2>/dev/null || :; exit 1' HUP INT TERM
-# An authenticated installer administrator runs the helper independently.
-# The receiver exits zero only after the helper has acknowledged its OK status.
-wait "$receiver" || exit 1
+attempt=0
+while :; do
+    attempt=$((attempt + 1))
+    /usr/local/sbin/reinstall-luks-receiver <&6 &
+    receiver=$!
+    trap 'kill "$receiver" 2>/dev/null || :; exit 1' HUP INT TERM
+    # Only an acknowledged complete two-entry secret advances partman.
+    if wait "$receiver"; then break; fi
+    # Receiver trap clears partial database values and removes private IPC.
+    [ ! -e /run/reinstall-luks ] || exit 1
+    [ "$attempt" -lt 3 ] || exit 1
+    echo 'Encrypted install: interrupted passphrase interaction; reconnect and run luks-wizard (bounded retry).' >/dev/console
+    db_capb backup align
+    sleep 1
+done
 trap - HUP INT TERM
 exec 6<&-
 # CAPB is shared with partman; never leave escape enabled for unrelated callers.
