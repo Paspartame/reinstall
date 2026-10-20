@@ -17,12 +17,13 @@ VNC/rescue. Loss of the LUKS secret means loss of encrypted data.
 
 ## Obtain the whole immutable source
 
-Publication has not been authorized. The supplied full candidate tarball works
-without GitHub: verify its accompanying SHA-256 file, unpack it and enter its
-source directory. Do not download `reinstall.sh` alone.
+Use the whole [Experimental branch](https://github.com/Paspartame/reinstall/tree/feature/debian13-luks-dropbear),
+not a standalone `reinstall.sh`: its crypto helpers and preseed must match.
+The full candidate tarball is an alternative: verify its accompanying SHA-256
+file, unpack it and enter its source directory.
 
-**Post-publication template only:** after the owner publishes a reviewed commit,
-set `REV` to the exact full SHA in that release's source manifest, then run:
+Set `REV` to the reviewed full commit SHA from the publication evidence/source
+manifest (not a moving branch name), then run:
 
 ```sh
 git clone https://github.com/Paspartame/reinstall.git
@@ -31,8 +32,8 @@ git checkout --detach "$REV"
 test "$(git rev-parse HEAD)" = "$REV"
 ```
 
-No working commit URL or published asset is asserted here. Compare the manifest
-and candidate archive checksum delivered with the reviewed version.
+Compare the manifest and candidate archive checksum delivered with the reviewed
+version. Branch publication is not a GitHub Release or a production certification.
 
 ## Prepare on the intended disposable target
 
