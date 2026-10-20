@@ -1,5 +1,33 @@
 # Experimental Debian 13 encrypted reinstall
 
+## Direct single-script encrypted preparation (Experimental)
+
+Debian 13 / amd64 / BIOS / IPv4 only. Install curl normally if absent. This
+ERASES the intended target disk after the manually selected installer boot.
+
+```sh
+curl -fLO 'https://raw.githubusercontent.com/Paspartame/reinstall/refs/heads/feature/debian13-luks-dropbear/reinstall.sh' || wget -O reinstall.sh 'https://raw.githubusercontent.com/Paspartame/reinstall/refs/heads/feature/debian13-luks-dropbear/reinstall.sh'
+bash reinstall.sh debian 13 --installer --encrypt --ssh-key github:YOUR_GITHUB_USER --unlock-port 2222 --username root
+```
+
+The single script automatically retrieves a byte-matched complete Fork revision,
+prints its full SHA, installs signed Debian dependencies and stages the native
+installer. It returns PREPARED, not installed; it never reboots automatically.
+Save/pin the printed Installer public identity on an independent controller,
+then run `reboot`. Through authenticated Installer SSH/PTY enter/confirm a NEW
+LUKS secret; at identity-ready collect and separately pin OS22/Dropbear2222
+public identities, compare final initrd, then release identity-continue.
+Each later encrypted boot needs manual pinned SSH/PTY unlock. Keep VNC/rescue.
+
+Pinned alternative: replace the branch segment in the download https://raw.githubusercontent.com/Paspartame/reinstall/refs/heads/feature/debian13-luks-dropbear/reinstall.sh with the
+full tested SHA from the accompanying source manifest. The entry script resolves
+its exact Git blob to a matching historical commit and refuses unmatched bytes.
+A moving branch download can resolve an older identical script; the printed
+resolved SHA is authoritative. Whole-checkout and bootstrap remain secondary
+compatibility methods; neither is required for this quickstart.
+
+
+
 ## One-command Experimental start (Debian 13 / amd64 / BIOS / IPv4)
 
 Replace `YOUR_USER` with your GitHub account holding your PUBLIC SSH key.
