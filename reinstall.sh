@@ -54,6 +54,41 @@ fi
 # 记录日志，过滤含有 password 的行
 # exec > >(tee >(grep -iv password >>/reinstall.log)) 2>&1
 THIS_SCRIPT=$(readlink -f "$0")
+# A lone encrypted entry script acquires its exact companion tree before any
+# normal CLI mutation. Ordinary modes never enter this block.
+if [[ " $* " == *" --encrypt "* ]] && [ ! -f "$(dirname "$THIS_SCRIPT")/debian-crypto-build.py" ]; then
+    [ "$EUID" = 0 ] || { echo 'Encrypted source acquisition requires root.' >&2; exit 1; }
+    . /etc/os-release
+    [ "$ID" = debian ] && [ "$VERSION_ID" = 13 ] || { echo 'Single-file encrypted mode requires Debian 13.' >&2; exit 1; }
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get install -y git ca-certificates python3 busybox-static openssh-client curl cpio gzip xz-utils
+    source_stage=$(mktemp -d /var/tmp/reinstall-source.XXXXXXXX)
+    chmod 700 "$source_stage"
+    trap 'rm -rf -- "$source_stage"' EXIT
+    git -c credential.helper= clone --quiet --branch feature/debian13-luks-dropbear https://github.com/Paspartame/reinstall.git "$source_stage/source"
+    # Resolve a pinned historical script by its Git blob, not a guessed version.
+    source_blob=$(git -C "$source_stage/source" hash-object "$THIS_SCRIPT")
+    source_revision=''
+    while read -r candidate; do
+        if [ "$(git -C "$source_stage/source" rev-parse "$candidate:reinstall.sh")" = "$source_blob" ]; then
+            source_revision=$candidate; break
+        fi
+    done < <(git -C "$source_stage/source" log --format=%H -- reinstall.sh)
+    [ -n "$source_revision" ] || { echo 'Source mismatch: download reinstall.sh again; no matching reviewed tree.' >&2; exit 1; }
+    git -C "$source_stage/source" checkout --quiet --detach "$source_revision"
+    cmp "$THIS_SCRIPT" "$source_stage/source/reinstall.sh" || exit 1
+    echo "Encrypted companion source: $source_revision (entry script byte-for-byte verified)"
+    bash "$source_stage/source/reinstall.sh" "$@"
+    source_exit=$?
+    if [ "$source_exit" = 0 ]; then
+        echo 'PREPARED, NOT INSTALLED: Debian 13 amd64 BIOS encrypted root, unencrypted /boot; target disk WILL BE ERASED.'
+        echo 'Save the Installer public host key printed above on an independent controller; Installer SSH is port 22.'
+        echo 'Next: reboot manually. Use authenticated Installer SSH/PTY /usr/local/sbin/reinstall-luks-passphrase to enter/confirm a NEW LUKS secret.'
+        echo 'At /run/reinstall-identity-ready collect target OS22 and Dropbear public keys, verify final initrd, pin separately, then touch /run/reinstall-identity-continue.'
+        echo 'Every encrypted boot requires pinned SSH/PTY unlock on the selected Dropbear port. Never trust keyscan alone.'
+    fi
+    exit "$source_exit"
+fi
 trap 'trap_err $LINENO $?' ERR
 
 trap_err() {

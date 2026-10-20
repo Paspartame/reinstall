@@ -1,6 +1,10 @@
 import pathlib,subprocess,tempfile,json,os,sys
 R=pathlib.Path(__file__).resolve().parents[1]
 s=(R/'reinstall.sh').read_text();decl=s[:s.index('# 检查 root')]
+# Single-file acquisition is integration-tested separately, not parser declaration.
+a=decl.index('# A lone encrypted entry script')
+b=decl.index("trap 'trap_err $LINENO $?' ERR", a)
+decl=decl[:a]+decl[b:]
 # Actual option list, getopt, both scans, mature key resolver and normalization.
 # This is a bounded parser fixture, NOT complete CLI acceptance.
 body=s[s.index('# 整理参数'):s.index('# 检查必须的参数')]
