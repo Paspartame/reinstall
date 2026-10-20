@@ -20,4 +20,7 @@ for bad in ['bad..host','-bad.example','example.org;id','bad\x1b[31m','bad\nHOST
  else:raise AssertionError('invalid address accepted')
 assert m.label('2001:0db8::1')=='2001:db8::1'
 assert m.label('SSH.Example.org')=='ssh.example.org'
-print('PUBLIC_IDENTITY_FORMAT_AND_REJECTION_PASS')
+s=(R/'reinstall-crypto-identities.py').read_text()
+assert 'if before!=after' in s and 'Verified final initrd SHA256: ' in s
+assert 'cmp "$identity_display" "$identity_recheck"' in (R/'reinstall-crypto-wizard').read_text()
+print('PUBLIC_IDENTITY_FORMAT_AND_REJECTION_PASS; initrd digest comparison static assertion only')

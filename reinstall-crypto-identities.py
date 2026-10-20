@@ -75,11 +75,16 @@ def verify():
     if len(kernels)!=1:raise ValueError('Ambiguous final kernel')
     ram=pathlib.Path('/run/reinstall-identity-ram')
     if run('stat','-f','-c','%T',str(ram))!='tmpfs':raise ValueError('Identity extraction must be tmpfs')
+    initrd=pathlib.Path('/boot/initrd.img-'+kernels[0].name)
+    before=hashlib.sha256(initrd.read_bytes()).hexdigest()
     with tempfile.TemporaryDirectory(prefix='identity-',dir=str(ram)) as td:
         subprocess.run(['unmkinitramfs','/boot/initrd.img-'+kernels[0].name,td+'/tree'],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=90)
         tree=pathlib.Path(td)/'tree';tree=tree/'main' if (tree/'main').is_dir() else tree
         for a,b in [(pathlib.Path(drop),tree/'etc/dropbear/dropbear_ed25519_host_key'),(pathlib.Path('/usr/local/lib/reinstall/debian-unlock-network.sh'),tree/'scripts/init-premount/reinstall-unlock-network'),(pathlib.Path('/etc/reinstall-unlock/network.conf'),tree/'etc/reinstall-unlock/network.conf'),(pathlib.Path('/etc/dropbear/initramfs/dropbear.conf'),tree/'etc/dropbear/dropbear.conf')]:
             if a.read_bytes()!=b.read_bytes():raise ValueError('Final initrd payload/identity mismatch')
+    after=hashlib.sha256(initrd.read_bytes()).hexdigest()
+    if before!=after:raise ValueError('Final initrd changed during verification')
+    print('Verified final initrd SHA256: '+after)
     show('DROPBEAR INITRAMFS SSH',dbkey,host,port)
     show('INSTALLED DEBIAN SSH',oskey,host,osport)
     if port==osport:
