@@ -2,6 +2,24 @@
 
 # reinstall
 
+## One-command Experimental start (Debian 13 / amd64 / BIOS / IPv4)
+
+Replace `YOUR_USER` with your GitHub account holding your PUBLIC SSH key.
+This command prompts on /dev/tty before preparing disk erasure. It installs
+signed APT dependencies and fetches the whole pinned tree. Keep the matching
+private key on an independent controller. It does NOT reboot automatically.
+
+```sh
+f=$(mktemp) && curl -fsSL 'https://raw.githubusercontent.com/Paspartame/reinstall/3f857671d9f98c79d5db7733ff6ba9df55bc5a6e/bootstrap-crypto.sh' -o "$f" && bash "$f" --revision 3f857671d9f98c79d5db7733ff6ba9df55bc5a6e --ssh-key github:YOUR_USER --unlock-port 2222; r=$?; rm -f -- "$f"; (exit "$r")
+```
+
+A one-line start is not unattended completion: record the printed Installer
+identity, reboot deliberately, then follow the Installer SSH/PTY password,
+public-key handoff pause/release and per-boot remote unlock instructions in
+DEBIAN-ENCRYPTION.md. Never pass a LUKS secret as an option. `--confirm-erase`
+is an explicitly selected noninteractive alternative, not a default.
+
+
 Experimental Debian 13 BIOS/amd64 encrypted reinstall and remote unlock: see
 [DEBIAN-ENCRYPTION.md](DEBIAN-ENCRYPTION.md). Requires a complete immutable checkout;
 manual unlock each reboot. Not a general production/UEFI guarantee.
