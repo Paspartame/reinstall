@@ -19,16 +19,13 @@ LUKS secret; at identity-ready collect and separately pin OS22/Dropbear2222
 public identities, compare final initrd, then release identity-continue.
 Each later encrypted boot needs manual pinned SSH/PTY unlock. Keep VNC/rescue.
 
-Pinned alternative (same tested script):
-
-```sh
-curl -fLo reinstall.sh 'https://raw.githubusercontent.com/Paspartame/reinstall/d536594506eb617ac5078f2569a4e8d7bcbac8f0/reinstall.sh' || wget -O reinstall.sh 'https://raw.githubusercontent.com/Paspartame/reinstall/d536594506eb617ac5078f2569a4e8d7bcbac8f0/reinstall.sh'
-```
-
-The entry script resolves byte-identical historical source and refuses unmatched content.
-A moving branch download can resolve an older identical script; the printed
-resolved SHA is authoritative. Whole-checkout and bootstrap remain secondary
-compatibility methods; neither is required for this quickstart.
+Advanced immutable download: choose the full SHA from the published evidence,
+download `https://raw.githubusercontent.com/Paspartame/reinstall/$REV/reinstall.sh`,
+then run `REINSTALL_SOURCE_REF="$REV" bash reinstall.sh debian 13 --installer --encrypt --ssh-key github:YOUR_GITHUB_USER --unlock-port 2222 --username root`.
+Default acquisition resolves the current whole branch commit and compares entry
+bytes; helper-only changes are included. A mismatch refuses preparation: download
+again or explicitly select the immutable matching revision. Whole-checkout and
+old bootstrap remain secondary compatibility methods.
 
 
 

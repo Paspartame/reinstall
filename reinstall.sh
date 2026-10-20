@@ -66,17 +66,15 @@ if [[ " $* " == *" --encrypt "* ]] && [ ! -f "$(dirname "$THIS_SCRIPT")/debian-c
     chmod 700 "$source_stage"
     trap 'rm -rf -- "$source_stage"' EXIT
     git -c credential.helper= clone --quiet --branch feature/debian13-luks-dropbear https://github.com/Paspartame/reinstall.git "$source_stage/source"
-    # Resolve a pinned historical script by its Git blob, not a guessed version.
-    source_blob=$(git -C "$source_stage/source" hash-object "$THIS_SCRIPT")
-    source_revision=''
-    while read -r candidate; do
-        if [ "$(git -C "$source_stage/source" rev-parse "$candidate:reinstall.sh")" = "$source_blob" ]; then
-            source_revision=$candidate; break
-        fi
-    done < <(git -C "$source_stage/source" log --format=%H -- reinstall.sh)
-    [ -n "$source_revision" ] || { echo 'Source mismatch: download reinstall.sh again; no matching reviewed tree.' >&2; exit 1; }
+    # Default binds the complete current branch tree, including helper-only
+    # updates. Advanced pinned downloads must explicitly select their full SHA.
+    source_revision=${REINSTALL_SOURCE_REF:-$(git -C "$source_stage/source" rev-parse HEAD)}
+    [[ "$source_revision" =~ ^[0-9a-f]{40}$ ]] || { echo 'REINSTALL_SOURCE_REF must be a full Git SHA.' >&2; exit 1; }
     git -C "$source_stage/source" checkout --quiet --detach "$source_revision"
-    cmp "$THIS_SCRIPT" "$source_stage/source/reinstall.sh" || exit 1
+    cmp "$THIS_SCRIPT" "$source_stage/source/reinstall.sh" || {
+        echo 'Source mismatch: re-download current reinstall.sh or set REINSTALL_SOURCE_REF to its exact full commit.' >&2
+        exit 1
+    }
     echo "Encrypted companion source: $source_revision (entry script byte-for-byte verified)"
     bash "$source_stage/source/reinstall.sh" "$@"
     source_exit=$?
