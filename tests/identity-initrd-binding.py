@@ -12,7 +12,7 @@ with tempfile.TemporaryDirectory() as td:
   f=P(p);f.parent.mkdir(parents=True,exist_ok=True);f.write_text(data)
  P('/boot/vmlinuz-fixture').write_text('PUBLIC-KERNEL')
  P('/boot/grub').mkdir()
- grub='set default="${next_entry}"\nset default="0"\nmenuentry \'Debian GNU/Linux\' {\n linux /vmlinuz-fixture root=fixture\n initrd /initrd.img-fixture\n}\n'
+ grub='set default="${next_entry}"\nset default="0"\nmenuentry \'Debian GNU/Linux\' {\n search --no-floppy --fs-uuid --set=root PUBLIC-BOOT-UUID\n linux /vmlinuz-fixture root=fixture\n initrd /initrd.img-fixture\n}\n'
  P('/boot/grub/grub.cfg').write_text(grub)
  P('/lib/modules/fixture').mkdir(parents=True);P('/run/reinstall-identity-ram').mkdir(parents=True)
  def run(*a):
@@ -20,7 +20,7 @@ with tempfile.TemporaryDirectory() as td:
   if a[0] in ('ssh-keygen','dropbearkey'):return key
   if a[0]=='stat':return 'tmpfs'
   if a[0]=='grub-editenv':return ''
-  if a[0]=='findmnt':return '/boot ext4'
+  if a[0]=='findmnt':return 'PUBLIC-BOOT-UUID' if a[3]=='UUID' else '/boot ext4'
   raise AssertionError(a)
  def extract(a,**kw):
   tree=Real(a[2])/'main'
@@ -42,7 +42,7 @@ with tempfile.TemporaryDirectory() as td:
   P('/boot/initrd.img-fixture').write_text('PUBLIC-CHANGED-NONPAYLOAD-BYTES')
   second=render()
   assert first!=second,'CONFIRMATION BYPASS: full initrd byte change not reflected in verified display'
-  for bad in [grub.replace('/initrd.img-fixture','/initrd.img-WRONG'),grub.replace('set default="0"','set default="1"')]:
+  for bad in [grub.replace('PUBLIC-BOOT-UUID','WRONG-UUID'),grub.replace('/initrd.img-fixture','/initrd.img-WRONG'),grub.replace('set default="0"','set default="1"')]:
    P('/boot/grub/grub.cfg').write_text(bad)
    try:render()
    except ValueError:pass

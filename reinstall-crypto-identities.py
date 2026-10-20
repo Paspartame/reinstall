@@ -62,6 +62,9 @@ def boot_selection(kernel):
     entries=re.split(r'^menuentry ',text,flags=re.M)
     if len(entries)<2:raise ValueError('Missing default GRUB entry')
     first=entries[1].split('\n}',1)[0]
+    roots=re.findall(r'^\s*search --no-floppy --fs-uuid --set=root (\S+)\s*$',first,re.M)
+    if roots!=[run('findmnt','-n','-o','UUID','/boot')]:raise ValueError('GRUB root filesystem does not match verified /boot')
+    if re.search(r'^\s*set root=',first,re.M):raise ValueError('GRUB root override refused')
     linux=re.findall(r'^\s*linux\s+(\S+)',first,re.M)
     initrds=re.findall(r'^\s*initrd\s+([^\n]+)',first,re.M)
     if linux!=['/vmlinuz-'+kernel] or initrds!=['/initrd.img-'+kernel]:raise ValueError('GRUB kernel/initrd selection mismatch')
