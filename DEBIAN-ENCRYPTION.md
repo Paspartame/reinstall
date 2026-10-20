@@ -1,5 +1,17 @@
 # Experimental Debian 13 encrypted reinstall
 
+## Unreleased S94 WebSSH wizard candidate
+
+The current local S94 candidate adds Installer-side `reinstall-crypto-wizard`.
+It is NOT yet published or fully verified. Public S93 users must keep following
+the manual handoff below; do not assume the public script already contains the
+wizard. No separate controller program is required by the candidate, but a
+client capable of checking independently saved host fingerprints is required.
+The wizard displays both target host identities and waits for CONTINUE; displaying
+keys does not prove the client stored them. Final candidate E2E and the full
+security/port/reconnect matrix remain outstanding. Do not release it as validated.
+
+
 ## Direct single-script encrypted preparation (Experimental)
 
 Debian 13 / amd64 / BIOS / IPv4 only. Install curl normally if absent. This

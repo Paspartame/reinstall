@@ -28,6 +28,7 @@ true; \
         install -m 0755 /usr/local/lib/reinstall/debian-unlock-hook.sh /target/etc/initramfs-tools/hooks/reinstall-unlock; \
         for f in mac_addr ipv4_has_internet dhcpv4 should_disable_dhcpv4 ipv4_addr ipv4_gateway; do cp "$netdir/$f" "/tmp/reinstall-net-facts/$f"; done; \
         chroot /target env -u DEBIAN_HAS_FRONTEND -u DEBCONF_REDIR -u DEBCONF_FRONTEND DEBIAN_FRONTEND=noninteractive apt-get install -y python3; \
+        cp /usr/local/lib/reinstall/reinstall-crypto-identities.py /target/usr/local/lib/reinstall/; \
         cp /debian-unlock-config.py /target/usr/local/lib/reinstall/; \
         cp /configs/ssh_keys /target/etc/reinstall-unlock/setup.pub; \
         cp -r /tmp/reinstall-net-facts /target/etc/reinstall-unlock/setup-facts; \

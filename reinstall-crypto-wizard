@@ -1,0 +1,53 @@
+#!/bin/sh
+# Installer-side only; SSH commands/SCP and emergency shells remain available.
+set +x
+set -eu
+PATH=/usr/local/lib/reinstall/applets:$PATH
+export PATH
+fail() { echo "FAILED: $*; gate remains closed. Expert shell remains available." >&2; exit 1; }
+[ "$(id -u)" = 0 ] || fail 'Installer root required'
+[ -f /reinstall-crypto-enabled ] || fail 'Not an encrypted Installer'
+[ -t 0 ] && [ -t 1 ] || fail 'Reconnect with a real PTY (ssh -tt)'
+[ ! -f /run/reinstall-identity-continue ] || { echo RELEASED; exit 0; }
+if [ -d /run/reinstall-luks/client ]; then
+    fail 'A passphrase interaction is active; do not submit a second secret'
+fi
+if [ -f /run/reinstall-luks/ready ]; then
+    echo WAITING_FOR_LUKS_SECRET
+    echo 'Use a NEW passphrase. Input is hidden; never put it in a command.'
+    /usr/local/sbin/reinstall-luks-passphrase || fail 'Passphrase receiver failed; inspect Installer state before retry'
+fi
+n=0
+while [ ! -f /run/reinstall-identity-ready ]; do
+    [ ! -f /run/reinstall-identity-continue ] || { echo RELEASED; exit 0; }
+    echo 'INSTALLING (or receiver not ready yet). Safe to disconnect and rerun reinstall-crypto-wizard.'
+    n=$((n + 1)); [ "$n" -le 180 ] || fail 'Wait exceeded 30 minutes; inspect Installer, then reconnect'
+    sleep 10
+    if [ -f /run/reinstall-luks/ready ]; then
+        echo 'WAITING_FOR_LUKS_SECRET: rerun reinstall-crypto-wizard to enter the secret.'
+        exit 0
+    fi
+done
+echo IDENTITY_READY
+# No private material leaves target. Verifier extracts only into target /run tmpfs.
+# Keep only PUBLIC verification output in the Installer RAM filesystem.
+umask 077
+identity_display=$(mktemp /run/reinstall-public-identities.XXXXXX)
+identity_recheck=$(mktemp /run/reinstall-public-recheck.XXXXXX)
+ram=/target/run/reinstall-identity-ram
+mkdir -p "$ram"
+mountpoint -q "$ram" || mount -t tmpfs -o mode=0700,size=256m tmpfs "$ram"
+trap 'umount "$ram" 2>/dev/null || :; rm -f "$identity_display" "$identity_recheck"' EXIT HUP INT TERM
+chroot /target python3 /usr/local/lib/reinstall/reinstall-crypto-identities.py --verify-target >"$identity_display" || fail 'Final initramfs/SSH identity verification failed'
+cat "$identity_display"
+echo VERIFIED_AWAITING_USER_CONFIRMATION
+echo 'Save BOTH identities above. Verify Dropbear BEFORE giving it LUKS input; verify Debian BEFORE login.'
+echo 'Display does NOT prove your client stored them. Never blindly accept a changed host key.'
+printf 'After saving the identities, type CONTINUE (anything else stays paused): '
+IFS= read -r answer || exit 1
+[ "$answer" = CONTINUE ] || { echo 'NOT RELEASED. Reconnect to retry.'; exit 1; }
+# Recheck after human interaction; a changed target must not pass a stale check.
+chroot /target python3 /usr/local/lib/reinstall/reinstall-crypto-identities.py --verify-target >"$identity_recheck" || fail 'Identity changed during confirmation'
+cmp "$identity_display" "$identity_recheck" || fail 'Displayed identity changed; rerun and save the new verified keys'
+: >/run/reinstall-identity-continue
+echo 'RELEASED: Installer will finish and reboot. Connect to the displayed Dropbear port, verify its identity and unlock with PTY; then verify Debian SSH separately.'

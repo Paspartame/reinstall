@@ -8,6 +8,8 @@ import tempfile
 import os
 
 FILES = {
+    'reinstall-crypto-wizard': 'usr/local/sbin/reinstall-crypto-wizard',
+    'reinstall-crypto-identities.py': 'usr/local/lib/reinstall/reinstall-crypto-identities.py',
     'debian-unlock-config.py': 'debian-unlock-config.py',
     'debian-crypto-recipe.sh': 'debian-crypto-recipe.sh',
     'debian-crypto-gate.sh': 'debian-crypto-gate.sh',
