@@ -65,7 +65,9 @@ if [[ " $* " == *" --encrypt "* ]] && [ ! -f "$(dirname "$THIS_SCRIPT")/debian-c
     source_stage=$(mktemp -d /var/tmp/reinstall-source.XXXXXXXX)
     chmod 700 "$source_stage"
     trap 'rm -rf -- "$source_stage"' EXIT
-    git -c credential.helper= clone --quiet --branch feature/debian13-luks-dropbear https://github.com/Paspartame/reinstall.git "$source_stage/source"
+    source_branch=${REINSTALL_SOURCE_BRANCH:-main}
+    case "$source_branch" in main|feature/debian13-luks-dropbear) ;; *) echo 'Unsupported REINSTALL_SOURCE_BRANCH' >&2; exit 1;; esac
+    git -c credential.helper= clone --quiet --branch "$source_branch" https://github.com/Paspartame/reinstall.git "$source_stage/source"
     # Default binds the complete current branch tree, including helper-only
     # updates. Advanced pinned downloads must explicitly select their full SHA.
     source_revision=${REINSTALL_SOURCE_REF:-$(git -C "$source_stage/source" rev-parse HEAD)}

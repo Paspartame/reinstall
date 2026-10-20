@@ -89,7 +89,7 @@ touch /tmp/S70_PRESEED_EARLY_COMMAND; echo S70_PRESEED_EARLY_COMMAND >/dev/conso
         di finish-install/reboot_in_progress note; \
     fi; \
 
-    if [ -f /reinstall-crypto-enabled ]; then echo 'Encrypted install: run reinstall-crypto-wizard (PTY required). Safe to reconnect. Expert shell/commands remain available.' >>/etc/motd; fi; \
+    if [ -f /reinstall-crypto-enabled ]; then ln -sf reinstall-crypto-wizard /usr/local/sbin/luks-wizard; echo 'Encrypted install: run luks-wizard (PTY required; safe to reconnect)' >>/etc/motd; fi; \
     echo S73_PHASE_USER >/dev/console; \
     mkdir -p /home; \
     chmod 755 /home; \

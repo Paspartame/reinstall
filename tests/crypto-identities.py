@@ -14,4 +14,10 @@ for host in ['evil\nHOST','example.org;touch','[bad]']:
  try:m.show('STAGE',key,host,22)
  except ValueError:pass
  else:raise AssertionError('host accepted')
+for bad in ['bad..host','-bad.example','example.org;id','bad\x1b[31m','bad\nHOST']:
+ try:m.label(bad)
+ except ValueError:pass
+ else:raise AssertionError('invalid address accepted')
+assert m.label('2001:0db8::1')=='2001:db8::1'
+assert m.label('SSH.Example.org')=='ssh.example.org'
 print('PUBLIC_IDENTITY_FORMAT_AND_REJECTION_PASS')
